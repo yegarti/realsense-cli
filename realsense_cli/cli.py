@@ -1,3 +1,5 @@
+from typing import Annotated
+
 import typer
 
 from realsense_cli.driver import get_driver
@@ -7,10 +9,14 @@ app = typer.Typer()
 
 
 @app.command(name='list')
+@app.command(name="list")
 def rs_list() -> None:
+    """
+    List connected devices with basic info
+    """
     driver = get_driver()
     devices = driver.query_devices()
-    show_devices(devices)
+    list_devices(devices)
 
 
 @app.command(name='conigure')

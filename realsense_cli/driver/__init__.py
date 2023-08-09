@@ -5,9 +5,9 @@ from realsense_cli.driver.realsense import Realsense
 
 
 def get_driver():
-    driver_type = os.environ.get('RSCLI_DRIVER', 'realsense')
+    driver_type = os.environ.get("RSCLI_DRIVER", "realsense")
     match driver_type:
-        case 'realsense':
+        case "realsense":
             return Realsense()
-        case 'mock':
+        case "mock":
             return MockDriver()
