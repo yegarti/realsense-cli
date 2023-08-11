@@ -1,15 +1,13 @@
-from typing import Annotated
-
 import typer
 
+from realsense_cli.commands.config.app import config_app
 from realsense_cli.driver import get_driver
-from realsense_cli.utils.rich import show_devices
+from realsense_cli.utils.rich import list_devices
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True)
 
 
 @app.command(name='list')
-@app.command(name="list")
 def rs_list() -> None:
     """
     List connected devices with basic info
@@ -19,6 +17,4 @@ def rs_list() -> None:
     list_devices(devices)
 
 
-@app.command(name='conigure')
-def rs_configure():
-    pass
+app.add_typer(config_app, name='config')
