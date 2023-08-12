@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from realsense_cli.types import DeviceInfo, Sensor, Option
+from realsense_cli.types import DeviceInfo, Sensor, Option, Profile
 from realsense_cli.utils.singleton import Singleton
 
 
@@ -30,7 +30,7 @@ class Driver(ABC, metaclass=Singleton):
         """
 
     @abstractmethod
-    def list_streams(self, sensor: Sensor) -> list:
+    def list_streams(self, sensor: Sensor) -> list[Profile]:
         """
         List supported streams for SENSOR
         """

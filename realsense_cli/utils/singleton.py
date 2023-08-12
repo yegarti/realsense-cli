@@ -2,7 +2,7 @@ from abc import ABCMeta
 
 
 class Singleton(ABCMeta):
-    _instances = {}
+    _instances: dict[type, type] = {}
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:

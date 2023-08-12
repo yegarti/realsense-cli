@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
@@ -30,7 +30,7 @@ def config_get(
     sensor: Annotated[
         Sensor, typer.Argument(help="The sensor to configure", show_default=False)
     ],
-    controls: Annotated[list[str], typer.Argument(help="Controls to query")] = None,
+    controls: Annotated[Optional[list[str]], typer.Argument(help="Controls to query")] = None,
     all_controls: Annotated[
         bool, typer.Option("--all/", help="Query all supported controls")
     ] = False,
@@ -50,7 +50,7 @@ def config_set(
     controls_values: Annotated[
         list[str],
         typer.Argument(help="Controls to set followed by the value in form of CONTROL=VALUE"),
-    ] = None,
+    ],
 ):
     driver = get_driver()
     controls = {}
