@@ -1,6 +1,7 @@
 import typer
 
 from realsense_cli.commands.config.app import config_app
+from realsense_cli.commands.stream.app import stream_app
 from realsense_cli.driver import get_driver
 from realsense_cli.utils.rich import list_devices
 
@@ -18,3 +19,5 @@ def rs_list() -> None:
 
 
 app.add_typer(config_app, name="config")
+
+app.add_typer(stream_app, name="stream")

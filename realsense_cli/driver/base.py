@@ -28,3 +28,9 @@ class Driver(ABC, metaclass=Singleton):
         """
         Set CONTROL_VALUES on SENSOR
         """
+
+    @abstractmethod
+    def list_streams(self, sensor: Sensor) -> list:
+        """
+        List supported streams for SENSOR
+        """

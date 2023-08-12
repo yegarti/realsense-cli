@@ -28,7 +28,16 @@ class Option:
     default_value: Any
 
 
-class ConfigOpMode(Enum):
-    SET = "set"
-    GET = "get"
-    LIST = "list"
+class Stream(Enum):
+    DEPTH = "Depth"
+    INFRARED = "Infrared 1"
+    INFRARED2 = "Infrared 2"
+    COLOR = "Color"
+
+
+@dataclass(frozen=True)
+class Profile:
+    stream: Stream
+    resolution: tuple[int, int]
+    fps: int
+    format: str

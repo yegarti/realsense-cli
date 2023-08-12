@@ -39,7 +39,7 @@ def config_get(
     if all_controls:
         controls = [opt.name for opt in driver.list_controls(sensor)]
     control_values = driver.get_control_values(sensor, controls)
-    list_options_values(control_values, sensor)
+    list_options_values(control_values)
 
 
 @config_app.command(name="set", help="Set controls for given SENSOR")

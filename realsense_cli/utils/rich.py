@@ -4,7 +4,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from realsense_cli.types import DeviceInfo, Option, Sensor
+from realsense_cli.types import DeviceInfo, Option, Sensor, Profile
 
 
 def list_devices(devices: list[DeviceInfo]) -> None:
@@ -29,8 +29,8 @@ def list_options(
     """
     Print a table showing sensor options
     """
-    title = f"{sensor} controls" if sensor else "Controls"
-    table = Table(title=title, box=box.SIMPLE, min_width=80)
+    title = f"{sensor.value} controls" if sensor else "Controls"
+    table = Table(title=title, box=box.SIMPLE)
     table.add_column("Name")
     table.add_column("Description")
     table.add_column("Min Value")
@@ -51,12 +51,31 @@ def list_options(
     Console().print(table)
 
 
-def list_options_values(options_values: dict[str, Any], sensor: Optional[Sensor] = None):
+def list_options_values(options_values: dict[str, Any]):
     table = Table(box=box.SIMPLE)
     table.add_column("Name")
     table.add_column("Value")
 
     for opt, value in options_values.items():
         table.add_row(opt, str(value))
+
+    Console().print(table)
+
+
+def list_profiles(profiles: list[Profile], sensor: Optional[Sensor] = None):
+    title = f"{sensor.value} streams" if sensor else "Streams"
+    table = Table(title=title, box=box.SIMPLE)
+    table.add_column("Stream")
+    table.add_column("Resolution")
+    table.add_column("FPS")
+    table.add_column("Format")
+
+    for profile in profiles:
+        table.add_row(
+            profile.stream.value,
+            "{}x{}".format(*profile.resolution),
+            str(profile.fps),
+            profile.format,
+        )
 
     Console().print(table)

@@ -1,7 +1,7 @@
 from typing import Any
 
 from realsense_cli.driver.base import Driver
-from realsense_cli.types import DeviceInfo, Sensor, Option
+from realsense_cli.types import DeviceInfo, Sensor, Option, Profile, Stream
 
 import pyrealsense2 as rs
 
@@ -68,6 +68,27 @@ class Realsense(Driver):
                     f"control '{control}' is not supported for sensor '{sensor.value}'"
                 )
             rs_sensor.set_option(option, value)
+
+    def list_streams(self, sensor: Sensor) -> list[Profile]:
+        rs_sensor = self._get_sensor(sensor)
+        profiles: list[rs.stream_profile] = rs_sensor.get_stream_profiles()
+        res = []
+        for profile in profiles:
+            if profile.is_video_stream_profile():
+                vsp: rs.video_stream_profile = profile.as_video_stream_profile()
+                width, height = vsp.width(), vsp.height()
+            else:
+                width, height = 0, 0
+
+            res.append(
+                Profile(
+                    stream=Stream(profile.stream_name()),
+                    resolution=(width, height),
+                    fps=profile.fps(),
+                    format=profile.format().name.upper(),
+                )
+            )
+        return res
 
     def _get_sensor(self, sensor: Sensor) -> rs.sensor:
         # TODO - get device by serial
