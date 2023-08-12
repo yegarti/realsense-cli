@@ -7,7 +7,7 @@ from realsense_cli.utils.rich import list_devices
 app = typer.Typer(no_args_is_help=True)
 
 
-@app.command(name='list')
+@app.command(name="list")
 def rs_list() -> None:
     """
     List connected devices with basic info
@@ -17,4 +17,4 @@ def rs_list() -> None:
     list_devices(devices)
 
 
-app.add_typer(config_app, name='config')
+app.add_typer(config_app, name="config")

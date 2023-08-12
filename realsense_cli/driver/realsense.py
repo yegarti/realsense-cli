@@ -1,3 +1,5 @@
+from typing import Any
+
 from realsense_cli.driver.base import Driver
 from realsense_cli.types import DeviceInfo, Sensor, Option
 
@@ -26,14 +28,7 @@ class Realsense(Driver):
         return devices
 
     def list_controls(self, sensor: Sensor) -> list[Option]:
-        dev = self._devices[0]
-        rs_sensor: rs.sensor
-        if sensor == Sensor.STEREO_MODULE:
-            rs_sensor = dev.first_depth_sensor()
-        elif sensor == Sensor.RGB_SENSOR:
-            rs_sensor = dev.first_color_sensor()
-        else:
-            raise ValueError(f"Unknown sensor: {sensor}")
+        rs_sensor: rs.sensor = self._get_sensor(sensor)
 
         options = rs_sensor.get_supported_options()
         res = []
@@ -53,3 +48,35 @@ class Realsense(Driver):
             )
         return res
 
+    def get_control_values(self, sensor: Sensor, controls: list[str]) -> dict[str, float]:
+        res = {}
+        rs_sensor: rs.sensor = self._get_sensor(sensor)
+        for control in controls:
+            option = getattr(rs.option, control, None)
+            if not option or not rs_sensor.supports(option):
+                raise ValueError(f"control '{control}' is not supported for sensor '{sensor}'")
+            res[control] = rs_sensor.get_option(option)
+        return res
+
+    def set_control_values(self, sensor: Sensor, control_values: dict[str, float]) -> None:
+        rs_sensor = self._get_sensor(sensor)
+
+        for control, value in control_values.items():
+            option = getattr(rs.option, control, None)
+            if not option or not rs_sensor.supports(option):
+                raise ValueError(
+                    f"control '{control}' is not supported for sensor '{sensor.value}'"
+                )
+            rs_sensor.set_option(option, value)
+
+    def _get_sensor(self, sensor: Sensor) -> rs.sensor:
+        # TODO - get device by serial
+        dev = self._devices[0]
+        rs_sensor: rs.sensor
+        if sensor == Sensor.STEREO_MODULE:
+            rs_sensor = dev.first_depth_sensor()
+        elif sensor == Sensor.RGB_SENSOR:
+            rs_sensor = dev.first_color_sensor()
+        else:
+            raise ValueError(f"Unknown sensor: {sensor}")
+        return rs_sensor

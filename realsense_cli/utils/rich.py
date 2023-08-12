@@ -50,3 +50,13 @@ def list_options(
 
     Console().print(table)
 
+
+def list_options_values(options_values: dict[str, Any], sensor: Optional[Sensor] = None):
+    table = Table(box=box.SIMPLE)
+    table.add_column("Name")
+    table.add_column("Value")
+
+    for opt, value in options_values.items():
+        table.add_row(opt, str(value))
+
+    Console().print(table)
