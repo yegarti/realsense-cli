@@ -35,6 +35,19 @@ class Stream(Enum):
     COLOR = "Color"
 
 
+class CliSensor(Enum):
+    DEPTH = "depth"
+    COLOR = "color"
+
+    @property
+    def rs_enum(self):
+        match self:
+            case self.DEPTH:
+                return Sensor.STEREO_MODULE
+            case self.COLOR:
+                return Sensor.RGB_SENSOR
+
+
 @dataclass(frozen=True)
 class Profile:
     stream: Stream
