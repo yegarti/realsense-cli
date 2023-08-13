@@ -1,7 +1,7 @@
 from typing import Any
 
 from realsense_cli.driver.base import Driver
-from realsense_cli.types import DeviceInfo, Sensor, Option, Profile, Stream
+from realsense_cli.model import DeviceInfo, Sensor, Option, Profile, Stream
 
 import pyrealsense2 as rs
 

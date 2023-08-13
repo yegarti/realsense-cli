@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from realsense_cli.types import DeviceInfo, Sensor, Option, Profile
+from realsense_cli.model import DeviceInfo, Sensor, Option, Profile
 from realsense_cli.utils.singleton import Singleton
 
 
