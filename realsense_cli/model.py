@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 from typing import Any, NamedTuple
 
 
@@ -15,7 +14,7 @@ class DeviceInfo:
 
 class Sensor(Enum):
     STEREO_MODULE = "Stereo Module"
-    RGB_SENSOR = "RGB Sensor"
+    RGB_CAMERA = "RGB Camera"
     # MOTION = "motion"
 
 
@@ -34,6 +33,20 @@ class Stream(Enum):
     INFRARED = "Infrared 1"
     INFRARED2 = "Infrared 2"
     COLOR = "Color"
+
+class CliStream(Enum):
+    DEPTH = "depth"
+    INFRARED = "infrared"
+    INFRARED2 = "infrared2"
+    COLOR = "color"
+
+    @property
+    def rs_enum(self) -> Stream:
+        match self:
+            case self.DEPTH:
+                return Stream.DEPTH
+            case self.COLOR:
+                return Stream.COLOR
 
 
 class CliSensor(Enum):
