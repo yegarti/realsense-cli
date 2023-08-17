@@ -1,7 +1,7 @@
 from typing import Any
 
 from realsense_cli.driver.base import Driver
-from realsense_cli.model import DeviceInfo, Sensor, Option, Profile, Stream
+from realsense_cli.model import DeviceInfo, Sensor, Option, Profile, Stream, Resolution
 
 import pyrealsense2 as rs
 
@@ -83,7 +83,7 @@ class Realsense(Driver):
             res.append(
                 Profile(
                     stream=Stream(profile.stream_name()),
-                    resolution=(width, height),
+                    resolution=Resolution(width, height),
                     fps=profile.fps(),
                     format=profile.format().name.upper(),
                 )

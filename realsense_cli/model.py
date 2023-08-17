@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+from typing import Any, NamedTuple
 
 
 @dataclass
@@ -40,17 +41,28 @@ class CliSensor(Enum):
     COLOR = "color"
 
     @property
-    def rs_enum(self):
+    def rs_enum(self) -> Sensor:
         match self:
             case self.DEPTH:
                 return Sensor.STEREO_MODULE
             case self.COLOR:
-                return Sensor.RGB_SENSOR
+                return Sensor.RGB_CAMERA
+
+
+class Resolution(NamedTuple):
+    width: int
+    height: int
+
+    @classmethod
+    def from_string(cls, res: str):
+        return Resolution(*res.split('x'))
 
 
 @dataclass(frozen=True)
 class Profile:
     stream: Stream
-    resolution: tuple[int, int]
-    fps: int
-    format: str
+    resolution: Resolution = Resolution(0, 0)
+    fps: int = 0
+    format: str = 'any'
+    index: int = -1
+
