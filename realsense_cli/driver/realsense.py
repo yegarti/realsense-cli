@@ -1,5 +1,3 @@
-from typing import Any
-
 from realsense_cli.driver.base import Driver
 from realsense_cli.model import DeviceInfo, Sensor, Option, Profile, Stream, Resolution
 
@@ -9,20 +7,34 @@ import pyrealsense2 as rs
 class Realsense(Driver):
     def __init__(self):
         self._ctx: rs.context = rs.context()
-        self._devices: list[rs.device] = self._ctx.query_devices()
+        self._devices: list[rs.device] = []
+        self._sensors: dict[rs.device, dict[Sensor, rs.sensor]] = {}
+        self._origin_sensor: dict[rs.device, dict[Stream, Sensor]] = {}
+        self._setup()
+
+    def _setup(self) -> None:
+        for dev in self._ctx.devices:
+            self._devices.append(dev)
+            self._sensors[dev] = {}
+            self._origin_sensor[dev] = {}
+
+            rs_sensor: rs.sensor
+            for rs_sensor in dev.sensors:
+                sensor: Sensor = Sensor(rs_sensor.get_info(rs.camera_info.name))
+                self._sensors[dev][sensor] = rs_sensor
 
     def query_devices(self) -> list[DeviceInfo]:
         devices = []
         rsdev: rs.device
-        for rsdev in self._devices:
-            sensors: list[rs.sensor] = rsdev.query_sensors()
+        for device, sensors in self._sensors.items():
+            rs_sensors = [s for s in sensors.values()]
             devices.append(
                 DeviceInfo(
-                    name=rsdev.get_info(rs.camera_info.name),
-                    serial=rsdev.get_info(rs.camera_info.serial_number),
-                    fw=rsdev.get_info(rs.camera_info.firmware_version),
-                    connection=rsdev.get_info(rs.camera_info.usb_type_descriptor),
-                    sensors=[s.get_info(rs.camera_info.name) for s in sensors],
+                    name=device.get_info(rs.camera_info.name),
+                    serial=device.get_info(rs.camera_info.serial_number),
+                    fw=device.get_info(rs.camera_info.firmware_version),
+                    connection=device.get_info(rs.camera_info.usb_type_descriptor),
+                    sensors=[s.get_info(rs.camera_info.name) for s in rs_sensors],
                 )
             )
         return devices
@@ -91,13 +103,6 @@ class Realsense(Driver):
         return res
 
     def _get_sensor(self, sensor: Sensor) -> rs.sensor:
-        # TODO - get device by serial
+        # TODO - refactor to use directly in functions
         dev = self._devices[0]
-        rs_sensor: rs.sensor
-        if sensor == Sensor.STEREO_MODULE:
-            rs_sensor = dev.first_depth_sensor()
-        elif sensor == Sensor.RGB_SENSOR:
-            rs_sensor = dev.first_color_sensor()
-        else:
-            raise ValueError(f"Unknown sensor: {sensor}")
-        return rs_sensor
+        return self._sensors[dev][sensor]
