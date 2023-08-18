@@ -34,6 +34,7 @@ class Stream(Enum):
     INFRARED2 = "Infrared 2"
     COLOR = "Color"
 
+
 class CliStream(Enum):
     DEPTH = "depth"
     INFRARED = "infrared"
@@ -68,7 +69,7 @@ class Resolution(NamedTuple):
 
     @classmethod
     def from_string(cls, res: str):
-        return Resolution(*res.split('x'))
+        return Resolution(*res.split("x"))
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,5 @@ class Profile:
     stream: Stream
     resolution: Resolution = Resolution(0, 0)
     fps: int = 0
-    format: str = 'any'
+    format: str = "any"
     index: int = -1
-

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from realsense_cli.driver.base import Driver
 from realsense_cli.model import DeviceInfo, Sensor, Option, Profile, Stream, Resolution
 
@@ -5,26 +7,55 @@ import pyrealsense2 as rs
 
 
 class Realsense(Driver):
-    def __init__(self):
+    def __init__(self, serial: Optional[str] = None):
         self._ctx: rs.context = rs.context()
         self._devices: list[rs.device] = []
         self._sensors: dict[rs.device, dict[Sensor, rs.sensor]] = {}
-        self._origin_sensor: dict[rs.device, dict[Stream, Sensor]] = {}
+        self._streams_map: dict[Stream, rs.stream] = {}
+
+        self._active_device: Optional[rs.device] = None
+        self._origin_sensor: dict[rs.stream, Sensor] = {}
         self._setup()
+        if serial:
+            self._setup_device(serial)
+        else:
+            self._active_device = self._devices[0]
 
     def _setup(self) -> None:
         for dev in self._ctx.devices:
             self._devices.append(dev)
             self._sensors[dev] = {}
-            self._origin_sensor[dev] = {}
 
             rs_sensor: rs.sensor
             for rs_sensor in dev.sensors:
-                sensor: Sensor = Sensor(rs_sensor.get_info(rs.camera_info.name))
-                self._sensors[dev][sensor] = rs_sensor
+                self._sensors[dev][Sensor(rs_sensor.name)] = rs_sensor
+
+        self._streams_map.update(
+            {
+                Stream.DEPTH: rs.stream.depth,
+                Stream.INFRARED: rs.stream.infrared,
+                Stream.INFRARED2: rs.stream.infrared,
+                Stream.COLOR: rs.stream.color,
+            }
+        )
+
+    def _setup_device(self, serial: str):
+        try:
+            dev = [
+                d for d in self._devices if d.get_info(rs.camera_info.serial_number) == serial
+            ][0]
+        except KeyError:
+            raise ValueError(f"Could find a device with serial: {serial}")
+        self._active_device = dev
+
+        for sensor, rs_sensor in self._sensors[dev].items():
+            streams = {profile.stream_type() for profile in rs_sensor.profiles}
+            for stream in streams:
+                self._origin_sensor[stream] = sensor
+
     def _verify_single_device(self):
         if len(self._devices) > 1:
-            raise RuntimeError(f'Multiple devices are not supported')
+            raise RuntimeError(f"Multiple devices are not supported")
 
     def query_devices(self) -> list[DeviceInfo]:
         devices = []
@@ -44,7 +75,7 @@ class Realsense(Driver):
 
     def list_controls(self, sensor: Sensor) -> list[Option]:
         self._verify_single_device()
-        rs_sensor: rs.sensor = self._get_sensor(sensor)
+        rs_sensor = self._get_sensor(sensor)
 
         options = rs_sensor.get_supported_options()
         res = []
@@ -110,6 +141,4 @@ class Realsense(Driver):
         return res
 
     def _get_sensor(self, sensor: Sensor) -> rs.sensor:
-        # TODO - refactor to use directly in functions
-        dev = self._devices[0]
-        return self._sensors[dev][sensor]
+        return self._sensors[self._active_device][sensor]
