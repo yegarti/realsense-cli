@@ -22,6 +22,9 @@ class Realsense(Driver):
             for rs_sensor in dev.sensors:
                 sensor: Sensor = Sensor(rs_sensor.get_info(rs.camera_info.name))
                 self._sensors[dev][sensor] = rs_sensor
+    def _verify_single_device(self):
+        if len(self._devices) > 1:
+            raise RuntimeError(f'Multiple devices are not supported')
 
     def query_devices(self) -> list[DeviceInfo]:
         devices = []
@@ -40,6 +43,7 @@ class Realsense(Driver):
         return devices
 
     def list_controls(self, sensor: Sensor) -> list[Option]:
+        self._verify_single_device()
         rs_sensor: rs.sensor = self._get_sensor(sensor)
 
         options = rs_sensor.get_supported_options()
@@ -61,6 +65,7 @@ class Realsense(Driver):
         return res
 
     def get_control_values(self, sensor: Sensor, controls: list[str]) -> dict[str, float]:
+        self._verify_single_device()
         res = {}
         rs_sensor: rs.sensor = self._get_sensor(sensor)
         for control in controls:
@@ -71,6 +76,7 @@ class Realsense(Driver):
         return res
 
     def set_control_values(self, sensor: Sensor, control_values: dict[str, float]) -> None:
+        self._verify_single_device()
         rs_sensor = self._get_sensor(sensor)
 
         for control, value in control_values.items():
@@ -82,6 +88,7 @@ class Realsense(Driver):
             rs_sensor.set_option(option, value)
 
     def list_streams(self, sensor: Sensor) -> list[Profile]:
+        self._verify_single_device()
         rs_sensor = self._get_sensor(sensor)
         profiles: list[rs.stream_profile] = rs_sensor.get_stream_profiles()
         res = []
