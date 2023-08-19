@@ -20,6 +20,9 @@ class Realsense(Driver):
             self._setup_device(serial)
         else:
             self._active_device = self._devices[0]
+        self._streaming = False
+        self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
+        self._pipe_profile: Optional[rs.pipeline_profile] = None
 
     def _setup(self) -> None:
         for dev in self._ctx.devices:
@@ -139,6 +142,33 @@ class Realsense(Driver):
                 )
             )
         return res
+
+    def play(self, profiles: list[Profile]) -> None:
+        self._verify_single_device()
+        cfg = rs.config()
+        cfg.enable_device(self._active_device.get_info(rs.camera_info.serial_number))
+        for profile in profiles:
+            rs_stream = self._streams_map[profile.stream]
+            rs_format = rs.format.any
+            cfg.enable_stream(
+                rs_stream,
+                profile.index,
+                profile.resolution.width,
+                profile.resolution.height,
+                rs_format,
+                profile.fps,
+            )
+
+        def _cb(f):
+            print(f)
+
+        self._pipe_profile = self._pipeline.start(cfg, _cb)
+        self._streaming = True
+
+    def stop(self) -> None:
+        self._verify_single_device()
+        self._pipeline.stop()
+        self._streaming = False
 
     def _get_sensor(self, sensor: Sensor) -> rs.sensor:
         return self._sensors[self._active_device][sensor]

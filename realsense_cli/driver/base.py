@@ -34,3 +34,15 @@ class Driver(ABC, metaclass=Singleton):
         """
         List supported streams for SENSOR
         """
+
+    @abstractmethod
+    def play(self, profiles: list[Profile]) -> None:
+        """
+        Start streaming selected profiles
+        """
+
+    @abstractmethod
+    def stop(self) -> None:
+        """
+        Stop streaming
+        """
