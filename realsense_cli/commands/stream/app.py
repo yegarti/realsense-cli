@@ -4,8 +4,7 @@ import typer
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from realsense_cli.driver import get_driver
-from realsense_cli.model import CliSensor, CliStream
-from realsense_cli.utils.driver import prepare_profiles
+from realsense_cli.model import CliSensor, CliStream, Profile
 from realsense_cli.utils.rich import list_profiles
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
@@ -44,8 +43,7 @@ def stream_play(
         raise typer.Abort()
 
     rs_streams = [stream.rs_enum for stream in streams]
-
-    profiles = prepare_profiles(rs_streams)
+    profiles = [Profile.new(stream) for stream in rs_streams]
     print(f"Streaming profiles: {[str(p) for p in profiles]}")
 
     driver.play(profiles)

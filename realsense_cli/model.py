@@ -79,3 +79,13 @@ class Profile:
     fps: int = 0
     format: str = "any"
     index: int = -1
+
+    @staticmethod
+    def new(stream: Stream):
+        if stream == Stream.INFRARED:
+            index = 1
+        elif stream == Stream.INFRARED2:
+            index = 2
+        else:
+            index = -1
+        return Profile(stream=stream, index=index)
