@@ -1,9 +1,10 @@
-from pprint import pprint
 from typing import Annotated, Optional
 
 import typer
+from rich.live import Live
 
 from realsense_cli.driver import get_driver
+from realsense_cli.stream_view import StreamView
 from realsense_cli.model import CliSensor, CliStream, Profile
 from realsense_cli.utils.rich import list_profiles
 
@@ -44,11 +45,14 @@ def stream_play(
 
     rs_streams = [stream.rs_enum for stream in streams]
     profiles = [Profile.new(stream) for stream in rs_streams]
+    view = StreamView(rs_streams)
 
     driver.play(profiles)
     try:
-        while True:
-            frameset = driver.wait_for_frameset()
-            pprint(frameset)
+        with Live(view, refresh_per_second=30) as live:
+            while True:
+                frameset = driver.wait_for_frameset()
+                view.update(frameset)
     finally:
+        print('Stopping all streams')
         driver.stop()
