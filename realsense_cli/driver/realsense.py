@@ -40,6 +40,8 @@ class Realsense(Driver):
                 Stream.INFRARED: rs.stream.infrared,
                 Stream.INFRARED2: rs.stream.infrared,
                 Stream.COLOR: rs.stream.color,
+                Stream.GYRO: rs.stream.gyro,
+                Stream.ACCEL: rs.stream.accel,
             }
         )
 

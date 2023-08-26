@@ -15,7 +15,7 @@ class DeviceInfo:
 class Sensor(Enum):
     STEREO_MODULE = "Stereo Module"
     RGB_CAMERA = "RGB Camera"
-    # MOTION = "motion"
+    MOTION_SENSOR = "Motion Sensor"
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,8 @@ class Stream(Enum):
     INFRARED = "Infrared 1"
     INFRARED2 = "Infrared 2"
     COLOR = "Color"
+    GYRO = "Gyro"
+    ACCEL = "Accel"
 
 
 class CliStream(Enum):
@@ -40,12 +42,18 @@ class CliStream(Enum):
     INFRARED = "infrared"
     INFRARED2 = "infrared2"
     COLOR = "color"
+    GYRO = "gyro"
+    ACCEL = "accel"
 
     @property
     def rs_enum(self) -> Stream:
         match self:
             case self.DEPTH:
                 return Stream.DEPTH
+            case self.GYRO:
+                return Stream.GYRO
+            case self.ACCEL:
+                return Stream.ACCEL
             case self.COLOR:
                 return Stream.COLOR
             case self.INFRARED:
@@ -59,6 +67,7 @@ class CliStream(Enum):
 class CliSensor(Enum):
     DEPTH = "depth"
     COLOR = "color"
+    MOTION = "motion"
 
     @property
     def rs_enum(self) -> Sensor:
@@ -67,6 +76,8 @@ class CliSensor(Enum):
                 return Sensor.STEREO_MODULE
             case self.COLOR:
                 return Sensor.RGB_CAMERA
+            case self.MOTION:
+                return Sensor.MOTION_SENSOR
 
 
 class Resolution(NamedTuple):
