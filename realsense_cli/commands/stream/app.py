@@ -25,28 +25,21 @@ def stream_list(
 @stream_app.command(name="play", help="Play streams")
 def stream_play(
     streams: Annotated[
-        list[CliStream], typer.Argument(help="steams to play", show_default=False)
-    ],
-    fps: Annotated[
-        Optional[int],
-        typer.Option("-f", "--fps", help="use specific FPS for all video streams"),
-    ] = None,
-    res: Annotated[
-        Optional[str],
-        typer.Option(
-            "-r", "--resolution", help="use specific resolution for all video streams"
-        ),
+        Optional[list[CliStream]], typer.Argument(help="Steams to play, default would stream all possible streams", show_default=False)
     ] = None,
 ):
     driver = get_driver()
+    if not streams:
+        streams = []
+
     if len(set(streams)) < len(streams):
         print("Duplicated streams are not allowed")
         raise typer.Abort()
 
     rs_streams = [stream.rs_enum for stream in streams]
     profiles = [Profile.new(stream) for stream in rs_streams]
-    view = StreamView(rs_streams)
 
+    view = StreamView(rs_streams)
     driver.play(profiles)
     try:
         with Live(view, refresh_per_second=30) as live:

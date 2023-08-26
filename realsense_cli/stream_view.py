@@ -1,25 +1,31 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 
-from rich.console import RenderableType, Group
+from rich.box import SIMPLE, SIMPLE_HEAD
+from rich.console import RenderableType, Group, group
 from rich.panel import Panel
 
 from realsense_cli.model import Stream, FrameSet, Frame, Profile
 
 
-class StreamView(Group):
-    def __init__(self, streams: list[Stream]):
-        self._panels: dict[Stream, Panel] = {
-            stream: Panel('...', title=stream.value, width=45) for stream in streams
-        }
-        super().__init__(*self._panels.values())
-        self._title_set = dict.fromkeys(self._panels, False)
-        self._prev_frame: dict[Stream, Frame] = dict.fromkeys(streams, None)
+class StreamView(Panel):
+    def __init__(self, streams: Optional[list[Stream]] = None):
+        self._dynamic = not streams
+        self._panels: dict[Stream, Panel] = {}
+        self._title_set: dict[Stream, bool] = {}
+        self._prev_frame: dict[Stream, Optional[Frame]] = {}
+        self._regroup(streams)
+
+        super().__init__(Group(*self._panels.values()), box=SIMPLE_HEAD,
+                         title_align='center')
 
     def update(self, frames: Optional[FrameSet]):
         for stream, frame in frames.items():
             if stream not in self._panels:
-                continue
+                if not self._dynamic:
+                    continue
+                else:
+                    self._regroup([stream])
             profile = frame.profile
             if not self._title_set[stream]:
                 self._panels[stream].title = self._gen_panel_title(profile)
@@ -30,6 +36,17 @@ class StreamView(Group):
                 'fps': self._calc_fps(frame)
             }
             self._panels[stream].renderable = f"Frame #{metrics['index']:<8} FPS: {metrics['fps']:<4.2f}"
+
+    def _regroup(self, streams: Optional[list[Stream]]):
+        if not streams:
+            streams = []
+        for stream in streams:
+            panel = Panel('...', title=stream.value, width=45)
+            self._panels[stream] = panel
+            self._title_set[stream] = False
+            self._prev_frame[stream] = None
+
+        self.renderable = Group(*self._panels.values())
 
     @property
     def panels(self):

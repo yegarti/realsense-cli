@@ -146,22 +146,24 @@ class Realsense(Driver):
             )
         return res
 
-    def play(self, profiles: list[Profile]) -> None:
+    def play(self, profiles: Optional[list[Profile]] = None) -> None:
         self._verify_single_device()
         cfg = rs.config()
         cfg.enable_device(self._active_device.get_info(rs.camera_info.serial_number))
-        for profile in profiles:
-            rs_stream = self._streams_map[profile.stream]
-            rs_format = rs.format.any
-            cfg.enable_stream(
-                rs_stream,
-                profile.index,
-                profile.resolution.width,
-                profile.resolution.height,
-                rs_format,
-                profile.fps,
-            )
-
+        if profiles:
+            for profile in profiles:
+                rs_stream = self._streams_map[profile.stream]
+                rs_format = rs.format.any
+                cfg.enable_stream(
+                    rs_stream,
+                    profile.index,
+                    profile.resolution.width,
+                    profile.resolution.height,
+                    rs_format,
+                    profile.fps,
+                )
+        else:
+            cfg.enable_all_streams()
         self._pipe_profile = self._pipeline.start(cfg, self._frame_queue)
         self._streaming = True
 
