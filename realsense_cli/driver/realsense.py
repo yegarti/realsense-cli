@@ -1,7 +1,7 @@
 from typing import Optional
 
 from realsense_cli.driver.base import Driver
-from realsense_cli.model import DeviceInfo, Sensor, Option, Profile, Stream, Resolution
+from realsense_cli.model import DeviceInfo, Sensor, Option, Profile, Stream, Resolution, FrameSet, Frame
 
 import pyrealsense2 as rs
 
@@ -23,6 +23,7 @@ class Realsense(Driver):
         self._streaming = False
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
         self._pipe_profile: Optional[rs.pipeline_profile] = None
+        self._frame_queue: rs.frame_queue = rs.frame_queue(capacity=1)
 
     def _setup(self) -> None:
         for dev in self._ctx.devices:
@@ -159,16 +160,44 @@ class Realsense(Driver):
                 profile.fps,
             )
 
-        def _cb(f):
-            print(f)
-
-        self._pipe_profile = self._pipeline.start(cfg, _cb)
+        self._pipe_profile = self._pipeline.start(cfg, self._frame_queue)
         self._streaming = True
 
     def stop(self) -> None:
         self._verify_single_device()
         self._pipeline.stop()
         self._streaming = False
+
+    def wait_for_frameset(self, timeout: float = 1.0) -> FrameSet:
+        result: FrameSet = {}
+        rs_frameset: rs.composite_frame = self._frame_queue.wait_for_frame(int(timeout*1000)).as_frameset()
+
+        rs_frame: rs.frame
+        for rs_frame in rs_frameset:
+            rs_profile: rs.stream_profile = rs_frame.get_profile()
+            profile = self._convert_profile(rs_profile)
+            frame = Frame(
+                profile=profile,
+                timestamp=rs_frame.get_timestamp(),
+                index=rs_frame.get_frame_number()
+            )
+            result[profile.stream] = frame
+
+        return result
+
+    def _convert_profile(self, profile: rs.stream_profile) -> Profile:
+        width, height = 0, 0
+        if profile.is_video_stream_profile():
+            vsp: rs.video_stream_profile = profile.as_video_stream_profile()
+            width, height = vsp.width(), vsp.height()
+
+        return Profile(
+            stream=Stream(profile.stream_name()),
+            resolution=Resolution(width, height),
+            fps=profile.fps(),
+            format=profile.format().name,
+            index=profile.stream_index(),
+        )
 
     def _get_sensor(self, sensor: Sensor) -> rs.sensor:
         return self._sensors[self._active_device][sensor]

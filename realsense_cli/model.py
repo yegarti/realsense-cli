@@ -48,6 +48,12 @@ class CliStream(Enum):
                 return Stream.DEPTH
             case self.COLOR:
                 return Stream.COLOR
+            case self.INFRARED:
+                return Stream.INFRARED
+            case self.INFRARED2:
+                return Stream.INFRARED2
+            case _:
+                raise RuntimeError(f'Unmatched stream: {self}')
 
 
 class CliSensor(Enum):
@@ -89,3 +95,13 @@ class Profile:
         else:
             index = -1
         return Profile(stream=stream, index=index)
+
+
+@dataclass
+class Frame:
+    profile: Profile
+    timestamp: float
+    index: int
+
+
+FrameSet = dict[Stream, Frame]

@@ -1,7 +1,7 @@
+from pprint import pprint
 from typing import Annotated, Optional
 
 import typer
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from realsense_cli.driver import get_driver
 from realsense_cli.model import CliSensor, CliStream, Profile
@@ -44,19 +44,11 @@ def stream_play(
 
     rs_streams = [stream.rs_enum for stream in streams]
     profiles = [Profile.new(stream) for stream in rs_streams]
-    print(f"Streaming profiles: {[str(p) for p in profiles]}")
 
     driver.play(profiles)
     try:
-        import time
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            transient=False,
-        ) as progress:
-            progress.add_task(description="Streaming...", total=None)
-            while True:
-                time.sleep(1)
+        while True:
+            frameset = driver.wait_for_frameset()
+            pprint(frameset)
     finally:
         driver.stop()
