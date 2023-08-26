@@ -25,7 +25,10 @@ def stream_list(
 @stream_app.command(name="play", help="Play streams")
 def stream_play(
     streams: Annotated[
-        Optional[list[CliStream]], typer.Argument(help="Steams to play, default would stream all possible streams", show_default=False)
+        Optional[list[CliStream]],
+        typer.Argument(
+            help="Steams to play, default would stream all possible streams", show_default=False
+        ),
     ] = None,
 ):
     driver = get_driver()
@@ -47,5 +50,5 @@ def stream_play(
                 frameset = driver.wait_for_frameset()
                 view.update(frameset)
     finally:
-        print('Stopping all streams')
+        print("Stopping all streams")
         driver.stop()

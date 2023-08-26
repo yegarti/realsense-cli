@@ -16,8 +16,7 @@ class StreamView(Panel):
         self._prev_frame: dict[Stream, Optional[Frame]] = {}
         self._regroup(streams)
 
-        super().__init__(Group(*self._panels.values()), box=SIMPLE_HEAD,
-                         title_align='center')
+        super().__init__(Group(*self._panels.values()), box=SIMPLE_HEAD, title_align="center")
 
     def update(self, frames: Optional[FrameSet]):
         for stream, frame in frames.items():
@@ -31,17 +30,16 @@ class StreamView(Panel):
                 self._panels[stream].title = self._gen_panel_title(profile)
                 self._title_set[stream] = True
 
-            metrics = {
-                'index': frame.index,
-                'fps': self._calc_fps(frame)
-            }
-            self._panels[stream].renderable = f"Frame #{metrics['index']:<8} FPS: {metrics['fps']:<4.2f}"
+            metrics = {"index": frame.index, "fps": self._calc_fps(frame)}
+            self._panels[
+                stream
+            ].renderable = f"Frame #{metrics['index']:<8} FPS: {metrics['fps']:<4.2f}"
 
     def _regroup(self, streams: Optional[list[Stream]]):
         if not streams:
             streams = []
         for stream in streams:
-            panel = Panel('...', title=stream.value, width=45)
+            panel = Panel("...", title=stream.value, width=45)
             self._panels[stream] = panel
             self._title_set[stream] = False
             self._prev_frame[stream] = None
@@ -53,13 +51,13 @@ class StreamView(Panel):
         return self._panels
 
     def _gen_panel_title(self, profile: Profile) -> str:
-        return '{stream} ({index}) {width}x{height} {fps}fps {format}'.format(
+        return "{stream} ({index}) {width}x{height} {fps}fps {format}".format(
             stream=profile.stream.value,
             index=profile.index,
             width=profile.resolution.width,
             height=profile.resolution.height,
             format=profile.format,
-            fps=profile.fps
+            fps=profile.fps,
         )
 
     def _calc_fps(self, frame: Frame) -> float:

@@ -61,7 +61,7 @@ class CliStream(Enum):
             case self.INFRARED2:
                 return Stream.INFRARED2
             case _:
-                raise RuntimeError(f'Unmatched stream: {self}')
+                raise RuntimeError(f"Unmatched stream: {self}")
 
 
 class CliSensor(Enum):

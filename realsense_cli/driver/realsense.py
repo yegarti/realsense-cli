@@ -1,7 +1,16 @@
 from typing import Optional
 
 from realsense_cli.driver.base import Driver
-from realsense_cli.model import DeviceInfo, Sensor, Option, Profile, Stream, Resolution, FrameSet, Frame
+from realsense_cli.model import (
+    DeviceInfo,
+    Sensor,
+    Option,
+    Profile,
+    Stream,
+    Resolution,
+    FrameSet,
+    Frame,
+)
 
 import pyrealsense2 as rs
 
@@ -174,7 +183,9 @@ class Realsense(Driver):
 
     def wait_for_frameset(self, timeout: float = 1.0) -> FrameSet:
         result: FrameSet = {}
-        rs_frameset: rs.composite_frame = self._frame_queue.wait_for_frame(int(timeout*1000)).as_frameset()
+        rs_frameset: rs.composite_frame = self._frame_queue.wait_for_frame(
+            int(timeout * 1000)
+        ).as_frameset()
 
         rs_frame: rs.frame
         for rs_frame in rs_frameset:
@@ -183,7 +194,7 @@ class Realsense(Driver):
             frame = Frame(
                 profile=profile,
                 timestamp=rs_frame.get_timestamp(),
-                index=rs_frame.get_frame_number()
+                index=rs_frame.get_frame_number(),
             )
             result[profile.stream] = frame
 
