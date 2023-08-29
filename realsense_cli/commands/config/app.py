@@ -62,3 +62,4 @@ def config_set(
             print(f"Failed to parse control value pair: {ctrl_val}")
             raise typer.Abort()
     driver.set_control_values(sensor.rs_enum, controls)
+    config_get(sensor, list(controls.keys()))
