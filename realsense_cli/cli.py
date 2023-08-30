@@ -21,3 +21,11 @@ def rs_list() -> None:
 app.add_typer(config_app, name="config")
 
 app.add_typer(stream_app, name="stream")
+
+
+@app.callback()
+def callback(ctx: typer.Context):
+    if ctx.invoked_subcommand != 'list':
+        if not get_driver().query_devices():
+            print("No devices are connected")
+        raise typer.Exit(1)

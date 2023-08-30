@@ -27,7 +27,7 @@ class Realsense(Driver):
         self._setup()
         if serial:
             self._setup_device(serial)
-        else:
+        elif self._devices:
             self._active_device = self._devices[0]
         self._streaming = False
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
