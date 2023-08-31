@@ -1,5 +1,7 @@
 from typing import Optional
 
+from loguru import logger
+
 from realsense_cli.driver.base import Driver
 from realsense_cli.model import (
     DeviceInfo,
@@ -17,18 +19,20 @@ import pyrealsense2 as rs
 
 class Realsense(Driver):
     def __init__(self, serial: Optional[str] = None):
+        logger.info("Instancing Realsense driver")
         self._ctx: rs.context = rs.context()
         self._devices: list[rs.device] = []
         self._sensors: dict[rs.device, dict[Sensor, rs.sensor]] = {}
         self._streams_map: dict[Stream, rs.stream] = {}
 
         self._active_device: Optional[rs.device] = None
-        self._origin_sensor: dict[rs.stream, Sensor] = {}
         self._setup()
         if serial:
             self._setup_device(serial)
         elif self._devices:
+            logger.debug("no serial, setting first device as active one")
             self._active_device = self._devices[0]
+        logger.info("active device: {}", self._active_device)
         self._streaming = False
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
         self._pipe_profile: Optional[rs.pipeline_profile] = None
@@ -36,12 +40,15 @@ class Realsense(Driver):
 
     def _setup(self) -> None:
         for dev in self._ctx.devices:
+            logger.debug("Adding device: {}", dev)
             self._devices.append(dev)
             self._sensors[dev] = {}
 
             rs_sensor: rs.sensor
             for rs_sensor in dev.sensors:
+                logger.debug("Adding sensor {} for device {}", rs_sensor, dev)
                 self._sensors[dev][Sensor(rs_sensor.name)] = rs_sensor
+        logger.info("Found {} devices", len(self._devices))
 
         self._streams_map.update(
             {
@@ -55,6 +62,7 @@ class Realsense(Driver):
         )
 
     def _setup_device(self, serial: str):
+        logger.debug("getting first device with serial {}", serial)
         try:
             dev = [
                 d for d in self._devices if d.get_info(rs.camera_info.serial_number) == serial
@@ -63,82 +71,81 @@ class Realsense(Driver):
             raise ValueError(f"Could find a device with serial: {serial}")
         self._active_device = dev
 
-        for sensor, rs_sensor in self._sensors[dev].items():
-            streams = {profile.stream_type() for profile in rs_sensor.profiles}
-            for stream in streams:
-                self._origin_sensor[stream] = sensor
-
-    def _verify_single_device(self):
-        if len(self._devices) > 1:
-            raise RuntimeError(f"Multiple devices are not supported")
-
     def query_devices(self) -> list[DeviceInfo]:
         devices = []
         rsdev: rs.device
         for device, sensors in self._sensors.items():
             rs_sensors = [s for s in sensors.values()]
-            devices.append(
-                DeviceInfo(
-                    name=device.get_info(rs.camera_info.name),
-                    serial=device.get_info(rs.camera_info.serial_number),
-                    fw=device.get_info(rs.camera_info.firmware_version),
-                    connection=device.get_info(rs.camera_info.usb_type_descriptor),
-                    sensors=[s.get_info(rs.camera_info.name) for s in rs_sensors],
-                )
+            logger.debug("adding device info for device {}", device)
+            info = DeviceInfo(
+                name=device.get_info(rs.camera_info.name),
+                serial=device.get_info(rs.camera_info.serial_number),
+                fw=device.get_info(rs.camera_info.firmware_version),
+                connection=device.get_info(rs.camera_info.usb_type_descriptor),
+                sensors=[s.get_info(rs.camera_info.name) for s in rs_sensors],
             )
+            logger.debug("adding device info: {}", info)
+            devices.append(info)
         return devices
 
     def list_controls(self, sensor: Sensor) -> list[Option]:
-        self._verify_single_device()
         rs_sensor = self._get_sensor(sensor)
+        logger.info("listing controls for sensor {}", rs_sensor)
 
         options = rs_sensor.get_supported_options()
         res = []
         for option in options:
+            logger.debug("querying option: {}", option)
             if rs_sensor.is_option_read_only(option):
+                logger.debug("skipping read only option")
                 continue
             rng: rs.option_range = rs_sensor.get_option_range(option)
-            res.append(
-                Option(
-                    name=option.name,
-                    description=rs_sensor.get_option_description(option),
-                    min_value=rng.min,
-                    max_value=rng.max,
-                    step=rng.step,
-                    default_value=rng.default,
-                )
+            opt = Option(
+                name=option.name,
+                description=rs_sensor.get_option_description(option),
+                min_value=rng.min,
+                max_value=rng.max,
+                step=rng.step,
+                default_value=rng.default,
             )
+            logger.debug("adding Option: {}", opt)
+            res.append(opt)
         return res
 
     def get_control_values(self, sensor: Sensor, controls: list[str]) -> dict[str, float]:
-        self._verify_single_device()
         res = {}
         rs_sensor: rs.sensor = self._get_sensor(sensor)
+        logger.info("querying controls {} for sensor {}", controls, rs_sensor)
         for control in controls:
             option = getattr(rs.option, control, None)
+            logger.debug('getting value for option: "{}"', option)
             if not option or not rs_sensor.supports(option):
                 raise ValueError(f"control '{control}' is not supported for sensor '{sensor}'")
             res[control] = rs_sensor.get_option(option)
+            logger.debug('"{}" value: {}', option, res[control])
         return res
 
     def set_control_values(self, sensor: Sensor, control_values: dict[str, float]) -> None:
-        self._verify_single_device()
         rs_sensor = self._get_sensor(sensor)
 
+        logger.info("setting controls {} for sensor {}", control_values, rs_sensor)
         for control, value in control_values.items():
             option = getattr(rs.option, control, None)
+            logger.debug('setting "{}" with value {}', option, value)
             if not option or not rs_sensor.supports(option):
+                logger.debug("no such option or not supported by sensor")
                 raise ValueError(
                     f"control '{control}' is not supported for sensor '{sensor.value}'"
                 )
             rs_sensor.set_option(option, value)
 
     def list_streams(self, sensor: Sensor) -> list[Profile]:
-        self._verify_single_device()
         rs_sensor = self._get_sensor(sensor)
+        logger.info("listing streams for sensor {}", rs_sensor)
         profiles: list[rs.stream_profile] = rs_sensor.get_stream_profiles()
         res = []
         for profile in profiles:
+            logger.debug("found profile: {}", profile)
             if profile.is_video_stream_profile():
                 vsp: rs.video_stream_profile = profile.as_video_stream_profile()
                 width, height = vsp.width(), vsp.height()
@@ -153,11 +160,12 @@ class Realsense(Driver):
                     format=profile.format().name.upper(),
                 )
             )
+            logger.debug("adding profile {}", res[-1])
         return res
 
     def play(self, profiles: Optional[list[Profile]] = None) -> None:
-        self._verify_single_device()
         cfg = rs.config()
+        logger.info("Playing profiles: {}", profiles)
         cfg.enable_device(self._active_device.get_info(rs.camera_info.serial_number))
         if profiles:
             for profile in profiles:
@@ -173,11 +181,12 @@ class Realsense(Driver):
                 )
         else:
             cfg.enable_all_streams()
+        logger.info("Starting stream")
         self._pipe_profile = self._pipeline.start(cfg, self._frame_queue)
         self._streaming = True
 
     def stop(self) -> None:
-        self._verify_single_device()
+        logger.info("Stopping stream")
         self._pipeline.stop()
         self._streaming = False
 
@@ -186,6 +195,7 @@ class Realsense(Driver):
         rs_frameset: rs.composite_frame = self._frame_queue.wait_for_frame(
             int(timeout * 1000)
         ).as_frameset()
+        logger.debug("frameset received")
 
         rs_frame: rs.frame
         for rs_frame in rs_frameset:
@@ -196,6 +206,7 @@ class Realsense(Driver):
                 timestamp=rs_frame.get_timestamp(),
                 index=rs_frame.get_frame_number(),
             )
+            logger.debug("{}\t#{} - {}", frame.profile.stream.value, frame.index, frame)
             result[profile.stream] = frame
 
         return result

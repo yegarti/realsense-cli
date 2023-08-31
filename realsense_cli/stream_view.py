@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional, Any
 
+from loguru import logger
 from rich.box import SIMPLE, SIMPLE_HEAD
 from rich.console import RenderableType, Group, group
 from rich.panel import Panel
@@ -10,6 +11,7 @@ from realsense_cli.model import Stream, FrameSet, Frame, Profile
 
 class StreamView(Panel):
     def __init__(self, streams: Optional[list[Stream]] = None):
+        logger.info("StreamView created")
         self._dynamic = not streams
         self._panels: dict[Stream, Panel] = {}
         self._title_set: dict[Stream, bool] = {}
@@ -19,11 +21,13 @@ class StreamView(Panel):
         super().__init__(Group(*self._panels.values()), box=SIMPLE_HEAD, title_align="center")
 
     def update(self, frames: Optional[FrameSet]):
+        logger.debug("updating view for frameset {}", frames.keys())
         for stream, frame in frames.items():
             if stream not in self._panels:
                 if not self._dynamic:
                     continue
                 else:
+                    logger.debug("new stream in dynamic mode, regrouping")
                     self._regroup([stream])
             profile = frame.profile
             if not self._title_set[stream]:
@@ -36,6 +40,7 @@ class StreamView(Panel):
             ].renderable = f"Frame #{metrics['index']:<8} FPS: {metrics['fps']:<4.2f}"
 
     def _regroup(self, streams: Optional[list[Stream]]):
+        logger.info("Regroup for streams {}", streams)
         if not streams:
             streams = []
         for stream in streams:
@@ -68,6 +73,9 @@ class StreamView(Panel):
             return 0
         num = frame.index - prev_frame.index
         delta = frame.timestamp - prev_frame.timestamp
+        logger.debug(
+            "calc fps {} - num = {}, delta = {}", frame.profile.stream.name, num, delta
+        )
         if not delta:
             return 0
 

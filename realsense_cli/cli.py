@@ -1,3 +1,7 @@
+import sys
+from typing import Annotated
+
+from loguru import logger
 import typer
 
 from realsense_cli.commands.config.app import config_app
@@ -24,8 +28,20 @@ app.add_typer(stream_app, name="stream")
 
 
 @app.callback()
-def callback(ctx: typer.Context):
-    if ctx.invoked_subcommand != 'list':
+def callback(
+    ctx: typer.Context, verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0
+):
+    logger.remove()
+    if verbose == 1:
+        logger.add(sys.stderr, level="INFO")
+    if verbose > 1:
+        logger.add(sys.stderr, level="DEBUG")
+
+    logger.info("Logger verbosity: {}", verbose)
+
+    if ctx.invoked_subcommand != "list":
+        logger.debug("checking device exist for subcommand '{}'", ctx.invoked_subcommand)
         if not get_driver().query_devices():
+            logger.error("no devices found - exiting")
             print("No devices are connected")
-        raise typer.Exit(1)
+            raise typer.Exit(1)
