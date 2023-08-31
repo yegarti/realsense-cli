@@ -76,6 +76,7 @@ class StreamView(Panel):
         logger.debug(
             "calc fps {} - num = {}, delta = {}", frame.profile.stream.name, num, delta
         )
+        self._prev_frame[stream] = frame
         if not delta:
             return 0
 
