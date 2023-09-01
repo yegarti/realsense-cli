@@ -21,6 +21,8 @@ class StreamView(Panel):
         super().__init__(Group(*self._panels.values()), box=SIMPLE_HEAD, title_align="center")
 
     def update(self, frames: Optional[FrameSet]):
+        if not frames:
+            frames = {}
         logger.debug("updating view for frameset {}", frames.keys())
         for stream, frame in frames.items():
             if stream not in self._panels:

@@ -78,6 +78,8 @@ class CliSensor(Enum):
                 return Sensor.RGB_CAMERA
             case self.MOTION:
                 return Sensor.MOTION_SENSOR
+            case _:
+                raise RuntimeError(f"Unmatched sensor: {self}")
 
 
 class Resolution(NamedTuple):
@@ -86,7 +88,7 @@ class Resolution(NamedTuple):
 
     @classmethod
     def from_string(cls, res: str):
-        return Resolution(*res.split("x"))
+        return Resolution(*[int(n) for n in res.split("x")])
 
 
 @dataclass(frozen=True)

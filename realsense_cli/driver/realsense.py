@@ -14,7 +14,7 @@ from realsense_cli.model import (
     Frame,
 )
 
-import pyrealsense2 as rs
+import pyrealsense2 as rs  # type: ignore
 
 
 class Realsense(Driver):
@@ -25,7 +25,7 @@ class Realsense(Driver):
         self._sensors: dict[rs.device, dict[Sensor, rs.sensor]] = {}
         self._streams_map: dict[Stream, rs.stream] = {}
 
-        self._active_device: Optional[rs.device] = None
+        self._active_device: rs.device = ...
         self._setup()
         if serial:
             self._setup_device(serial)

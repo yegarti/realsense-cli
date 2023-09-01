@@ -15,6 +15,9 @@ loguru = "^0.7.0"
 [tool.poetry.scripts]
 rs = 'realsense_cli.cli:app'
 
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.5.1"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
