@@ -4,7 +4,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from realsense_cli.model import DeviceInfo, Option, Sensor, Profile
+from realsense_cli.types import DeviceInfo, Option, Sensor, Profile
 
 
 def list_devices(devices: list[DeviceInfo]) -> None:

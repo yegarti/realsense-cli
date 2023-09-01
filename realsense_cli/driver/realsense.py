@@ -3,7 +3,7 @@ from typing import Optional
 from loguru import logger
 
 from realsense_cli.driver.base import Driver
-from realsense_cli.model import (
+from realsense_cli.types import (
     DeviceInfo,
     Sensor,
     Option,

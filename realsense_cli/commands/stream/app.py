@@ -5,7 +5,7 @@ from rich.live import Live
 
 from realsense_cli.driver import get_driver
 from realsense_cli.stream_view import StreamView
-from realsense_cli.model import CliSensor, CliStream, Profile
+from realsense_cli.types import CliSensor, CliStream, Profile
 from realsense_cli.utils.rich import list_profiles
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)

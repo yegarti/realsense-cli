@@ -6,7 +6,7 @@ from rich.box import SIMPLE, SIMPLE_HEAD
 from rich.console import RenderableType, Group, group
 from rich.panel import Panel
 
-from realsense_cli.model import Stream, FrameSet, Frame, Profile
+from realsense_cli.types import Stream, FrameSet, Frame, Profile
 
 
 class StreamView(Panel):
