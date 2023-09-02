@@ -90,6 +90,9 @@ class Resolution(NamedTuple):
     def from_string(cls, res: str):
         return Resolution(*[int(n) for n in res.split("x")])
 
+    def __str__(self):
+        return f"{self.width}x{self.height}"
+
 
 @dataclass(frozen=True)
 class Profile:
