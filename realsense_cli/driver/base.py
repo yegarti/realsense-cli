@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
-from realsense_cli.types import DeviceInfo, Sensor, Option, Profile
+from realsense_cli.types import DeviceInfo, Sensor, Option, Profile, FrameSet
 from realsense_cli.utils.singleton import Singleton
 
 
@@ -45,4 +46,11 @@ class Driver(ABC, metaclass=Singleton):
     def stop(self) -> None:
         """
         Stop streaming
+        """
+
+    @abstractmethod
+    def wait_for_frameset(self, timeout: float = 1.0) -> Optional[FrameSet]:
+        """
+        Get next frameset waiting in queue.
+        return None when no frameset arrive after timeout
         """
