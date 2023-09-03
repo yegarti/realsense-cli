@@ -4,8 +4,8 @@ from typing import Annotated
 from loguru import logger
 import typer
 
-from realsense_cli.commands.config.app import config_app
-from realsense_cli.commands.stream.app import stream_app
+from realsense_cli.commands.config import config_app
+from realsense_cli.commands.stream import stream_app
 from realsense_cli.driver import get_driver
 from realsense_cli.utils.rich import list_devices
 

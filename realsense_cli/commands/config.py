@@ -3,6 +3,7 @@ from typing import Annotated, Optional
 import typer
 
 from realsense_cli.driver import get_driver
+from realsense_cli.exceptions import SensorNotFound
 from realsense_cli.types import CliSensor
 from realsense_cli.utils.rich import list_options, list_options_values
 
