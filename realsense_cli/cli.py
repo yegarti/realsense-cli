@@ -9,7 +9,9 @@ from realsense_cli.commands.stream import stream_app
 from realsense_cli.driver import get_driver
 from realsense_cli.utils.rich import list_devices
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(
+    no_args_is_help=True, context_settings={"help_option_names": ["-h", "--help"]}
+)
 
 
 @app.command(name="list")
