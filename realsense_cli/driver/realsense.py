@@ -190,7 +190,7 @@ class Realsense(Driver):
         self._pipeline.stop()
         self._streaming = False
 
-    def wait_for_frameset(self, timeout: float = 1.0) -> Optional[FrameSet]:
+    def wait_for_frameset(self, timeout: float = 3.0) -> Optional[FrameSet]:
         result: FrameSet = {}
         rs_frameset: rs.composite_frame = self._frame_queue.wait_for_frame(
             int(timeout * 1000)

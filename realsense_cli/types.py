@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, NamedTuple
 
+from loguru import logger
+
 
 @dataclass
 class DeviceInfo:
@@ -88,7 +90,11 @@ class Resolution(NamedTuple):
 
     @classmethod
     def from_string(cls, res: str):
-        return Resolution(*[int(n) for n in res.split("x")])
+        try:
+            width, height = [int(n) for n in res.split("x")]
+        except Exception:
+            raise ValueError(f"Failed to parse resolution provided: {res}")
+        return Resolution(width, height)
 
     def __str__(self):
         return f"{self.width}x{self.height}"
@@ -102,15 +108,16 @@ class Profile:
     format: str = "any"
     index: int = -1
 
-    @staticmethod
-    def new(stream: Stream):
-        if stream == Stream.INFRARED:
-            index = 1
-        elif stream == Stream.INFRARED2:
-            index = 2
-        else:
-            index = -1
-        return Profile(stream=stream, index=index)
+    def __post_init__(self):
+        match self.stream:
+            case Stream.INFRARED:
+                index = 1
+            case Stream.INFRARED2:
+                index = 2
+            case _:
+                index = -1
+        if self.index == -1:
+            object.__setattr__(self, "index", index)
 
 
 @dataclass

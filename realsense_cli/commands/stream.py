@@ -1,11 +1,12 @@
 from typing import Annotated, Optional
 
 import typer
+from loguru import logger
 from rich.live import Live
 
 from realsense_cli.driver import get_driver
 from realsense_cli.stream_view import StreamView
-from realsense_cli.types import CliSensor, CliStream, Profile
+from realsense_cli.types import CliSensor, CliStream, Profile, Resolution
 from realsense_cli.utils.rich import list_profiles
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
@@ -27,9 +28,19 @@ def stream_play(
     streams: Annotated[
         Optional[list[CliStream]],
         typer.Argument(
-            help="Steams to play, default would stream all possible streams", show_default=False
+            help="Steams to play, no argument would stream all possible streams at pre-configured settings",
+            show_default=False,
         ),
     ] = None,
+    fps: Annotated[
+        Optional[int], typer.Option("--fps", "-f", help="FPS to use for streams selected")
+    ] = 0,
+    resolution: Annotated[
+        Optional[str],
+        typer.Option(
+            "--res", "-r", help="Resolution to use for streams selected, example: 640x480"
+        ),
+    ] = "0x0",
 ):
     driver = get_driver()
     if not streams:
@@ -39,16 +50,25 @@ def stream_play(
         print("Duplicated streams are not allowed")
         raise typer.Abort()
 
-    rs_streams = [stream.rs_enum for stream in streams]
-    profiles = [Profile.new(stream) for stream in rs_streams]
+    profiles = []
+    for stream in streams:
+        profile = Profile(
+            stream=stream.rs_enum,
+            resolution=Resolution.from_string(resolution),
+            fps=fps,
+        )
+        profiles.append(profile)
 
-    view = StreamView(rs_streams)
+    view = StreamView([stream.rs_enum for stream in streams])
     driver.play(profiles)
     try:
         with Live(view, refresh_per_second=30) as live:
             while True:
-                frameset = driver.wait_for_frameset()
-                view.update(frameset)
+                try:
+                    frameset = driver.wait_for_frameset()
+                    view.update(frameset)
+                except RuntimeError:
+                    logger.warning("Frames didn't arrive until timeout")
     finally:
         print("Stopping all streams")
         driver.stop()
