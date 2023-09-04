@@ -231,3 +231,7 @@ class Realsense(Driver):
                 f'Sensor "{sensor.value}" is not supported on device: {self._active_device.get_info(rs.camera_info.serial_number)}'
             )
         return self._sensors[self._active_device][sensor]
+
+    @property
+    def sensors(self) -> list[Sensor]:
+        return list(self._sensors[self._active_device].keys())

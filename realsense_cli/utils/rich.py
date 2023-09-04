@@ -62,8 +62,7 @@ def list_options_values(options_values: dict[str, Any]):
     Console().print(table)
 
 
-def list_profiles(profiles: list[Profile], sensor: Optional[Sensor] = None):
-    title = f"{sensor.value} streams" if sensor else "Streams"
+def list_profiles(profiles: list[Profile], title: str = "Streams"):
     table = Table(title=title, box=box.SIMPLE)
     table.add_column("Stream")
     table.add_column("Resolution")

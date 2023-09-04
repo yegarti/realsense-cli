@@ -54,3 +54,8 @@ class Driver(ABC, metaclass=Singleton):
         Get next frameset waiting in queue.
         return None when no frameset arrive after timeout
         """
+
+    @property
+    @abstractmethod
+    def sensors(self) -> list[Sensor]:
+        """Sensors"""

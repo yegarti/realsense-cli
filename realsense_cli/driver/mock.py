@@ -117,3 +117,7 @@ class MockDriver(Driver):
 
     def wait_for_frameset(self, timeout: float = 1.0) -> Optional[FrameSet]:
         pass
+
+    @property
+    def sensors(self) -> list[Sensor]:
+        return list(self._config["sensors"].keys())

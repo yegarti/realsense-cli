@@ -14,13 +14,19 @@ stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
 
 @stream_app.command(name="list", help="List supported streams for given SENSOR")
 def stream_list(
-    sensor: Annotated[
-        CliSensor, typer.Argument(help="Sensor to query for streams", show_default=False)
-    ],
+    sensors: Annotated[
+        Optional[list[CliSensor]],
+        typer.Argument(help="Sensor to query for streams", show_default=False),
+    ] = None,
 ) -> None:
     driver = get_driver()
-    profiles = driver.list_streams(sensor.rs_enum)
-    list_profiles(profiles, sensor.rs_enum)
+    sensors = [sensor.rs_enum for sensor in sensors]
+    if not sensors:
+        sensors = driver.sensors
+    profiles = []
+    for sensor in sensors:
+        profiles.extend(driver.list_streams(sensor))
+    list_profiles(profiles)
 
 
 @stream_app.command(name="play", help="Play streams")
