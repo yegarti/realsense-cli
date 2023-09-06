@@ -98,7 +98,6 @@ def test_stream_list(driver, sensor):
         for line in stdout.split("\n"):
             if (
                 profile.stream.value in line
-                and f" {profile.fps} " in line
                 and profile.format in line
                 and str(profile.resolution) in line
             ):

@@ -4,7 +4,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from realsense_cli.types import DeviceInfo, Option, Sensor, Profile
+from realsense_cli.types import DeviceInfo, Option, Sensor, Profile, Stream
 
 
 def list_devices(devices: list[DeviceInfo]) -> None:
@@ -69,11 +69,43 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
     table.add_column("FPS")
     table.add_column("Format")
 
+    stream_order: dict[Stream] = {
+        Stream.DEPTH: 0,
+        Stream.INFRARED: 1,
+        Stream.INFRARED2: 2,
+        Stream.COLOR: 3,
+        Stream.GYRO: 4,
+        Stream.ACCEL: 5,
+    }
+
+    def sort_key(pro: Profile):
+        return (
+            stream_order[pro.stream],
+            pro.resolution.width * pro.resolution.height,
+            pro.format,
+            pro.fps,
+        )
+
+    profiles = sorted(profiles, key=sort_key)
+
+    def mapi(pro: Profile):
+        return Profile(
+            stream=pro.stream,
+            resolution=pro.resolution,
+            format=pro.format,
+            index=pro.index,
+            fps=0,
+        )
+
+    buckets = {}
     for profile in profiles:
+        buckets.setdefault(mapi(profile), []).append(profile.fps)
+
+    for profile, fps in buckets.items():
         table.add_row(
             profile.stream.value,
-            "{}x{}".format(*profile.resolution),
-            str(profile.fps),
+            str(profile.resolution),
+            "/".join(map(str, fps)),
             profile.format,
         )
 
