@@ -33,7 +33,9 @@ poetry build
 ## Usage
 
 You can call `rs --help` to read the help for every command.
+
 All commands, except `rs list` operate on a single connected device.
+
 In case multiple devices are connected use the `-s/--serial` option to select a device.
 
 ### List
