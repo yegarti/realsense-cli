@@ -42,11 +42,12 @@ def stream_play(
         Optional[int], typer.Option("--fps", "-f", help="FPS to use for streams selected")
     ] = 0,
     resolution: Annotated[
-        Optional[str],
+        Optional[Resolution],
         typer.Option(
-            "--res", "-r", help="Resolution to use for streams selected, example: 640x480"
+            "--res", "-r", help="Resolution to use for streams selected, example: 640x480",
+            parser=Resolution.from_string,
         ),
-    ] = "0x0",
+    ] = '0x0',
 ):
     driver = get_driver()
     if not streams:
@@ -60,7 +61,7 @@ def stream_play(
     for stream in streams:
         profile = Profile(
             stream=stream.rs_enum,
-            resolution=Resolution.from_string(resolution),
+            resolution=resolution,
             fps=fps,
         )
         profiles.append(profile)
