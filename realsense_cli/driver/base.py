@@ -59,3 +59,12 @@ class Driver(ABC, metaclass=Singleton):
     @abstractmethod
     def sensors(self) -> list[Sensor]:
         """Sensors"""
+
+    @property
+    @abstractmethod
+    def active_device(self) -> str:
+        """Read active device"""
+
+    @active_device.setter
+    def active_device(self, serial: Optional[str]):
+        """Set active device"""

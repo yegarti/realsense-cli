@@ -31,7 +31,9 @@ app.add_typer(stream_app, name="stream")
 
 @app.callback()
 def callback(
-    ctx: typer.Context, verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0
+    ctx: typer.Context,
+    verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
+    serial: Annotated[str, typer.Option("-s", "--serial")] = "",
 ):
     logger.remove()
     if verbose == 1:
@@ -41,9 +43,23 @@ def callback(
 
     logger.info("Logger verbosity: {}", verbose)
 
+    driver = get_driver()
+    logger.debug(f"setting '{serial}' as active device")
+    try:
+        driver.active_device = serial
+    except ValueError:
+        print(f"Serial {serial} does not match any connected device:")
+        raise typer.Abort()
+
     if ctx.invoked_subcommand != "list":
         logger.debug("checking device exist for subcommand '{}'", ctx.invoked_subcommand)
-        if not get_driver().query_devices():
+        dev_n = len(driver.query_devices())
+        if dev_n == 0:
             logger.error("no devices found - exiting")
             print("No devices are connected")
             raise typer.Exit(1)
+        if dev_n > 1 and not serial:
+            logger.warning("Multiple devices without serial!")
+            print(
+                f"Multiple devices are connected but no serial provided, using device: '{driver.active_device}'"
+            )

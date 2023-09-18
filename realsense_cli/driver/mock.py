@@ -121,3 +121,11 @@ class MockDriver(Driver):
     @property
     def sensors(self) -> list[Sensor]:
         return list(self._config["sensors"].keys())
+
+    @property
+    def active_device(self) -> str:
+        return self._config["devices"][0].serial
+
+    @active_device.setter
+    def active_device(self, serial: Optional[str] = None) -> str:
+        pass

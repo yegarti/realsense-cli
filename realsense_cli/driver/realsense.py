@@ -1,3 +1,4 @@
+import operator
 from typing import Optional
 
 from loguru import logger
@@ -18,20 +19,20 @@ import pyrealsense2 as rs  # type: ignore
 
 
 class Realsense(Driver):
-    def __init__(self, serial: Optional[str] = None):
+    def __init__(self):
         logger.info("Instancing Realsense driver")
         self._ctx: rs.context = rs.context()
         self._devices: list[rs.device] = []
         self._sensors: dict[rs.device, dict[Sensor, rs.sensor]] = {}
         self._streams_map: dict[Stream, rs.stream] = {}
 
-        self._active_device: rs.device = ...
         self._setup()
-        if serial:
-            self._setup_device(serial)
-        elif self._devices:
-            logger.debug("no serial, setting first device as active one")
-            self._active_device = self._devices[0]
+        if self._devices:
+            logger.debug(f"setting first device as active one")
+            # sorting to be deterministic every run
+            self._active_device = sorted(
+                [(d.get_info(rs.camera_info.serial_number), d) for d in self._devices]
+            )[0][1]
         logger.info("active device: {}", self._active_device)
         self._streaming = False
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
@@ -235,3 +236,18 @@ class Realsense(Driver):
     @property
     def sensors(self) -> list[Sensor]:
         return list(self._sensors[self._active_device].keys())
+
+    @property
+    def active_device(self) -> str:
+        return self._active_device.get_info(rs.camera_info.serial_number)
+
+    @active_device.setter
+    def active_device(self, serial: Optional[str] = None):
+        if not serial:
+            return
+        for dev in self._devices:
+            if dev.get_info(rs.camera_info.serial_number) == serial:
+                self._active_device = dev
+                break
+        else:
+            raise ValueError(f"No device with serial {serial} is connected")
