@@ -20,11 +20,13 @@ def stream_list(
     ] = None,
 ) -> None:
     driver = get_driver()
-    sensors = [sensor.rs_enum for sensor in sensors]
-    if not sensors:
-        sensors = driver.sensors
+    if sensors:
+        rs_sensors = [sensor.rs_enum for sensor in sensors]
+    else:
+        rs_sensors = driver.sensors
+
     profiles = []
-    for sensor in sensors:
+    for sensor in rs_sensors:
         profiles.extend(driver.list_streams(sensor))
     list_profiles(profiles)
 
@@ -39,15 +41,17 @@ def stream_play(
         ),
     ] = None,
     fps: Annotated[
-        Optional[int], typer.Option("--fps", "-f", help="FPS to use for streams selected")
+        int, typer.Option("--fps", "-f", help="FPS to use for streams selected")
     ] = 0,
     resolution: Annotated[
-        Optional[Resolution],
+        Resolution,
         typer.Option(
-            "--res", "-r", help="Resolution to use for streams selected, example: 640x480",
+        "--res",
+            "-r",
+            help="Resolution to use for streams selected, example: 640x480",
             parser=Resolution.from_string,
         ),
-    ] = '0x0',
+    ] = "0x0",
 ):
     driver = get_driver()
     if not streams:

@@ -69,7 +69,7 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
     table.add_column("FPS")
     table.add_column("Format")
 
-    stream_order: dict[Stream] = {
+    stream_order: dict[Stream, int] = {
         Stream.DEPTH: 0,
         Stream.INFRARED: 1,
         Stream.INFRARED2: 2,
@@ -97,7 +97,7 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
             fps=0,
         )
 
-    buckets = {}
+    buckets: dict[Profile, list] = {}
     for profile in profiles:
         buckets.setdefault(mapi(profile), []).append(profile.fps)
 
