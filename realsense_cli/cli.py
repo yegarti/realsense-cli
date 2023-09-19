@@ -33,7 +33,7 @@ app.add_typer(stream_app, name="stream")
 def callback(
     ctx: typer.Context,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
-    serial: Annotated[str, typer.Option("-s", "--serial")] = "",
+    serial: Annotated[str, typer.Option("-s", "--serial", help="Act on device with this serial number")] = "",
 ):
     logger.remove()
     if verbose == 1:

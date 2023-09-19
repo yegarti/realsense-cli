@@ -24,7 +24,14 @@ class Realsense(Driver):
         self._ctx: rs.context = rs.context()
         self._devices: list[rs.device] = []
         self._sensors: dict[rs.device, dict[Sensor, rs.sensor]] = {}
-        self._streams_map: dict[Stream, rs.stream] = {}
+        self._streams_map: dict[Stream, rs.stream] = {
+            Stream.DEPTH: rs.stream.depth,
+            Stream.INFRARED: rs.stream.infrared,
+            Stream.INFRARED2: rs.stream.infrared,
+            Stream.COLOR: rs.stream.color,
+            Stream.GYRO: rs.stream.gyro,
+            Stream.ACCEL: rs.stream.accel,
+        }
 
         self._setup()
         if self._devices:
@@ -50,17 +57,6 @@ class Realsense(Driver):
                 logger.debug("Adding sensor {} for device {}", rs_sensor, dev)
                 self._sensors[dev][Sensor(rs_sensor.name)] = rs_sensor
         logger.info("Found {} devices", len(self._devices))
-
-        self._streams_map.update(
-            {
-                Stream.DEPTH: rs.stream.depth,
-                Stream.INFRARED: rs.stream.infrared,
-                Stream.INFRARED2: rs.stream.infrared,
-                Stream.COLOR: rs.stream.color,
-                Stream.GYRO: rs.stream.gyro,
-                Stream.ACCEL: rs.stream.accel,
-            }
-        )
 
     def _setup_device(self, serial: str):
         logger.debug("getting first device with serial {}", serial)
@@ -104,10 +100,10 @@ class Realsense(Driver):
             opt = Option(
                 name=option.name,
                 description=rs_sensor.get_option_description(option),
-                min_value=rng.min,
-                max_value=rng.max,
-                step=rng.step,
-                default_value=rng.default,
+                min_value=round(rng.min, 6),
+                max_value=round(rng.max, 6),
+                step=round(rng.step, 6),
+                default_value=round(rng.default, 6),
             )
             logger.debug("adding Option: {}", opt)
             res.append(opt)
