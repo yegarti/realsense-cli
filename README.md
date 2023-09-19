@@ -1,6 +1,6 @@
 # Realsense-CLI
 
-RealSenseCLI is a command-line utility for interacting with [RealSense](https://www.google.com/) cameras built on top of [pyrealsense2](https://github.com/).
+RealSenseCLI is a command-line utility for interacting with [RealSense](https://github.com/IntelRealSense/librealsense) cameras built on top of [pyrealsense2](https://pypi.org/project/pyrealsense2/).
 
 With this package, you can easily access and control the functionalities of your RealSense cameras directly from the terminal
 
@@ -58,6 +58,31 @@ List connected devices
 #### List sensor supported controls
 ```
 > rs config list depth
+
+                                                                                         Controls                                                                                           
+  Name                     Description                                                                                                        Min Value   Max Value   Step    Default Value  
+ ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+  exposure                 Depth Exposure (usec)                                                                                              1.0         200000.0    1.0     8500.0         
+  gain                     UVC image gain                                                                                                     16.0        248.0       1.0     16.0           
+  enable_auto_exposure     Enable Auto Exposure                                                                                               0.0         1.0         1.0     1.0            
+  visual_preset            Advanced-Mode Preset                                                                                               0.0         5.0         1.0     0.0            
+  laser_power              Manual laser power in mw. applicable only when laser power mode is set to Manual                                   0.0         360.0       30.0    150.0          
+  emitter_enabled          Emitter select, 0-disable all emitters, 1-enable laser, 2-enable laser auto (opt), 3-enable LED (opt)              0.0         2.0         1.0     1.0            
+  frames_queue_size        Max number of frames you can hold at a given time. Increasing this number will reduce frame drops but increase     0.0         32.0        1.0     16.0           
+                           latency, and vice versa                                                                                                                                           
+  error_polling_enabled    Enable / disable polling of camera internal errors                                                                 0.0         1.0         1.0     0.0            
+  output_trigger_enabled   Generate trigger from the camera to external device once per frame                                                 0.0         1.0         1.0     0.0            
+  depth_units              Number of meters represented by a single depth unit                                                                1e-06       0.01        1e-06   0.001          
+  inter_cam_sync_mode      Inter-camera synchronization mode: 0:Default, 1:Master, 2:Slave, 3:Full Salve, 4-258:Genlock with burst count of   0.0         260.0       1.0     0.0            
+                           1-255 frames for each trigger, 259 and 260 for two frames per trigger with laser ON-OFF and OFF-ON.                                                               
+  emitter_on_off           Alternating emitter pattern, toggled on/off on per-frame basis                                                     0.0         1.0         1.0     0.0            
+  global_time_enabled      Enable/Disable global timestamp                                                                                    0.0         1.0         1.0     1.0            
+  emitter_always_on        Emitter always on mode: 0:disabled(default), 1:enabled                                                             0.0         1.0         1.0     0.0            
+  hdr_enabled              HDR Option                                                                                                         0.0         1.0         1.0     0.0            
+  sequence_name            HDR Option                                                                                                         0.0         3.0         1.0     1.0            
+  sequence_size            HDR Option                                                                                                         2.0         2.0         1.0     2.0            
+  sequence_id              HDR Option                                                                                                         0.0         2.0         1.0     0.0            
+                                                                                                                                                                                      
 ```
 
 #### Query sensor controls
