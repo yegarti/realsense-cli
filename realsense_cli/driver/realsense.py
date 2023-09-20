@@ -40,6 +40,8 @@ class Realsense(Driver):
             self._active_device = sorted(
                 [(d.get_info(rs.camera_info.serial_number), d) for d in self._devices]
             )[0][1]
+        else:
+            self._active_device = None
         logger.info("active device: {}", self._active_device)
         self._streaming = False
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
@@ -57,16 +59,6 @@ class Realsense(Driver):
                 logger.debug("Adding sensor {} for device {}", rs_sensor, dev)
                 self._sensors[dev][Sensor(rs_sensor.name)] = rs_sensor
         logger.info("Found {} devices", len(self._devices))
-
-    def _setup_device(self, serial: str):
-        logger.debug("getting first device with serial {}", serial)
-        try:
-            dev = [
-                d for d in self._devices if d.get_info(rs.camera_info.serial_number) == serial
-            ][0]
-        except KeyError:
-            raise ValueError(f"Could find a device with serial: {serial}")
-        self._active_device = dev
 
     def query_devices(self) -> list[DeviceInfo]:
         devices = []

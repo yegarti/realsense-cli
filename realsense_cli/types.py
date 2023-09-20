@@ -17,7 +17,7 @@ class DeviceInfo:
 class Sensor(Enum):
     STEREO_MODULE = "Stereo Module"
     RGB_CAMERA = "RGB Camera"
-    MOTION_SENSOR = "Motion Sensor"
+    MOTION_SENSOR = "Motion Module"
 
 
 @dataclass(frozen=True)
