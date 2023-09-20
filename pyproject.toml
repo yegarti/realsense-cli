@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "realsense-cli"
-version = "0.1.0"
+version = "v0.1.1"
 description = ""
 authors = ["Yehuda Garti <yeudag@gmail.com>"]
 readme = "README.md"
