@@ -18,6 +18,7 @@ rs = 'realsense_cli.cli:app'
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.5.1"
 pytest = "^7.4.1"
+black = "^23.9.1"
 
 [build-system]
 requires = ["poetry-core"]
