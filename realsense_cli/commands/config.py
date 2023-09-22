@@ -36,6 +36,8 @@ def config_get(
     ] = False,
 ):
     driver = get_driver()
+    if not controls:
+        controls = []
     if all_controls:
         controls = [opt.name for opt in driver.list_controls(sensor.rs_enum)]
     control_values = driver.get_control_values(sensor.rs_enum, controls)

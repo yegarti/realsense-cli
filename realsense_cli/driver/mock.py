@@ -1,8 +1,8 @@
 # mypy: ignore-errors
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Optional
 
-from realsense_cli.driver.base import Driver
+from realsense_cli.driver import Realsense
 from realsense_cli.types import (
     DeviceInfo,
     Sensor,
@@ -82,7 +82,7 @@ _default_config = {
 
 
 @dataclass
-class MockDriver(Driver):
+class MockDriver(Realsense):
     def __init__(self, config: Optional[dict] = None):
         if not config:
             config = _default_config
@@ -94,7 +94,7 @@ class MockDriver(Driver):
     def list_controls(self, sensor: Sensor) -> list[Option]:
         return self._config["sensors"][sensor]["options"]
 
-    def get_control_values(self, sensor: Sensor, controls: list[str]) -> dict[str, Any]:
+    def get_control_values(self, sensor: Sensor, controls: list[str]) -> dict[str, float]:
         opts = self._config["sensors"][sensor]["options"]
         res = {}
         for control in controls:
@@ -103,7 +103,7 @@ class MockDriver(Driver):
                     res[opt.name] = opt.default_value
         return res
 
-    def set_control_values(self, sensor: Sensor, control_values: dict[str, Any]) -> None:
+    def set_control_values(self, sensor: Sensor, control_values: dict[str, float]) -> None:
         pass
 
     def list_streams(self, sensor: Sensor) -> list[Profile]:

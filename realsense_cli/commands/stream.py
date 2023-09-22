@@ -46,12 +46,12 @@ def stream_play(
     resolution: Annotated[
         Resolution,
         typer.Option(
-        "--res",
+            "--res",
             "-r",
             help="Resolution to use for streams selected, example: 640x480",
             parser=Resolution.from_string,
         ),
-    ] = "0x0",
+    ] = "0x0",  # type: ignore
 ):
     driver = get_driver()
     if not streams:

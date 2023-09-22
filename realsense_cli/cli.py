@@ -29,7 +29,7 @@ app.add_typer(config_app, name="config")
 app.add_typer(stream_app, name="stream")
 
 
-@app.command(name='reset')
+@app.command(name="reset")
 def rs_reset() -> None:
     """
     Send hardware reset command to device
@@ -44,7 +44,9 @@ def rs_reset() -> None:
 def callback(
     ctx: typer.Context,
     verbose: Annotated[int, typer.Option("--verbose", "-v", count=True)] = 0,
-    serial: Annotated[str, typer.Option("-s", "--serial", help="Act on device with this serial number")] = "",
+    serial: Annotated[
+        str, typer.Option("-s", "--serial", help="Act on device with this serial number")
+    ] = "",
 ):
     logger.remove()
     if verbose == 1:

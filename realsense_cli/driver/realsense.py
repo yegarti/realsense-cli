@@ -3,7 +3,6 @@ from typing import Optional
 
 from loguru import logger
 
-from realsense_cli.driver.base import Driver
 from realsense_cli.types import (
     DeviceInfo,
     Sensor,
@@ -18,7 +17,11 @@ from realsense_cli.types import (
 import pyrealsense2 as rs  # type: ignore
 
 
-class Realsense(Driver):
+class Realsense:
+    """
+    pyrealsense2 wrapper driver
+    """
+
     def __init__(self):
         logger.info("Instancing Realsense driver")
         self._ctx: rs.context = rs.context()
@@ -61,6 +64,9 @@ class Realsense(Driver):
         logger.info("Found {} devices", len(self._devices))
 
     def query_devices(self) -> list[DeviceInfo]:
+        """
+        Query connected devices
+        """
         devices = []
         rsdev: rs.device
         for device, sensors in self._sensors.items():
@@ -78,6 +84,9 @@ class Realsense(Driver):
         return devices
 
     def list_controls(self, sensor: Sensor) -> list[Option]:
+        """
+        List controls supported by SENSOR
+        """
         rs_sensor = self._get_sensor(sensor)
         logger.info("listing controls for sensor {}", rs_sensor)
 
@@ -102,6 +111,9 @@ class Realsense(Driver):
         return res
 
     def get_control_values(self, sensor: Sensor, controls: list[str]) -> dict[str, float]:
+        """
+        Get values for CONTROLS from SENSOR
+        """
         res = {}
         rs_sensor: rs.sensor = self._get_sensor(sensor)
         logger.info("querying controls {} for sensor {}", controls, rs_sensor)
@@ -115,6 +127,9 @@ class Realsense(Driver):
         return res
 
     def set_control_values(self, sensor: Sensor, control_values: dict[str, float]) -> None:
+        """
+        Set CONTROL_VALUES on SENSOR
+        """
         rs_sensor = self._get_sensor(sensor)
 
         logger.info("setting controls {} for sensor {}", control_values, rs_sensor)
@@ -129,6 +144,9 @@ class Realsense(Driver):
             rs_sensor.set_option(option, value)
 
     def list_streams(self, sensor: Sensor) -> list[Profile]:
+        """
+        List supported streams for SENSOR
+        """
         rs_sensor = self._get_sensor(sensor)
         logger.info("listing streams for sensor {}", rs_sensor)
         profiles: list[rs.stream_profile] = rs_sensor.get_stream_profiles()
@@ -153,6 +171,9 @@ class Realsense(Driver):
         return res
 
     def play(self, profiles: Optional[list[Profile]] = None) -> None:
+        """
+        Start streaming selected profiles
+        """
         cfg = rs.config()
         logger.info("Playing profiles: {}", profiles)
         cfg.enable_device(self._active_device.get_info(rs.camera_info.serial_number))
@@ -175,11 +196,18 @@ class Realsense(Driver):
         self._streaming = True
 
     def stop(self) -> None:
+        """
+        Stop streaming
+        """
         logger.info("Stopping stream")
         self._pipeline.stop()
         self._streaming = False
 
     def wait_for_frameset(self, timeout: float = 3.0) -> Optional[FrameSet]:
+        """
+        Get next frameset waiting in queue.
+        return None when no frameset arrive after timeout
+        """
         result: FrameSet = {}
         rs_frameset: rs.composite_frame = self._frame_queue.wait_for_frame(
             int(timeout * 1000)
@@ -201,9 +229,13 @@ class Realsense(Driver):
         return result
 
     def reset(self):
+        """
+        Send hardware reset to device
+        """
         self._active_device.hardware_reset()
 
     def _convert_profile(self, profile: rs.stream_profile) -> Profile:
+        """Convert lrs profile to rscli profile"""
         width, height = 0, 0
         if profile.is_video_stream_profile():
             vsp: rs.video_stream_profile = profile.as_video_stream_profile()
