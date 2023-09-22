@@ -29,6 +29,17 @@ app.add_typer(config_app, name="config")
 app.add_typer(stream_app, name="stream")
 
 
+@app.command(name='reset')
+def rs_reset() -> None:
+    """
+    Send hardware reset command to device
+    """
+    driver = get_driver()
+    dev = driver.active_device
+    print(f"Performing hardware reset for device '{dev}'")
+    driver.reset()
+
+
 @app.callback()
 def callback(
     ctx: typer.Context,

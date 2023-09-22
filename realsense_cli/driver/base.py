@@ -55,6 +55,12 @@ class Driver(ABC, metaclass=Singleton):
         return None when no frameset arrive after timeout
         """
 
+    @abstractmethod
+    def reset(self):
+        """
+        Send hardware reset to device
+        """
+
     @property
     @abstractmethod
     def sensors(self) -> list[Sensor]:

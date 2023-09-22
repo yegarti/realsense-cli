@@ -200,6 +200,9 @@ class Realsense(Driver):
 
         return result
 
+    def reset(self):
+        self._active_device.hardware_reset()
+
     def _convert_profile(self, profile: rs.stream_profile) -> Profile:
         width, height = 0, 0
         if profile.is_video_stream_profile():
