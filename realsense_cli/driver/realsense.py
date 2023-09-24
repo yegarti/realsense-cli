@@ -165,6 +165,7 @@ class Realsense:
                     resolution=Resolution(width, height),
                     fps=profile.fps(),
                     format=profile.format().name.upper(),
+                    index=profile.stream_index(),
                 )
             )
             logger.debug("adding profile {}", res[-1])
