@@ -4,7 +4,7 @@ import typer
 
 from realsense_cli.driver import get_driver
 from realsense_cli.types import CliSensor
-from realsense_cli.utils.rich import list_options, list_options_values
+from realsense_cli.printer import list_options, list_options_values
 
 config_app = typer.Typer(help="Configure controls", no_args_is_help=True)
 
