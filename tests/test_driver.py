@@ -23,7 +23,7 @@ def test_query_devices_no_device(driver):
 # @pytest.mark.parametrize('sensor')
 def test_list_controls(mock_context, driver):
     result = {opt.name: opt for opt in driver.list_controls(Sensor.STEREO_MODULE)}
-    expected = MOCK_SENSORS['options'][Sensor.STEREO_MODULE]
+    expected = MOCK_SENSORS["options"][Sensor.STEREO_MODULE]
     for option in expected:
         assert option.name in result
         opt_res = result[option.name]
@@ -34,7 +34,7 @@ def test_list_controls(mock_context, driver):
 
 
 def test_get_control_values(mock_context, driver):
-    data = MOCK_SENSORS['options'][Sensor.STEREO_MODULE]
+    data = MOCK_SENSORS["options"][Sensor.STEREO_MODULE]
     opts = [option.name for option in data]
     result = driver.get_control_values(Sensor.STEREO_MODULE, opts)
 
@@ -44,24 +44,27 @@ def test_get_control_values(mock_context, driver):
 
 
 def test_set_control_values(mock_context, driver):
-    data = MOCK_SENSORS['options'][Sensor.STEREO_MODULE]
-    driver.set_control_values(Sensor.STEREO_MODULE, {
-        'exposure': 1000,
-    })
+    data = MOCK_SENSORS["options"][Sensor.STEREO_MODULE]
+    driver.set_control_values(
+        Sensor.STEREO_MODULE,
+        {
+            "exposure": 1000,
+        },
+    )
     opts = [option.name for option in data]
     result = driver.get_control_values(Sensor.STEREO_MODULE, opts)
 
     for opt in data:
         assert opt.name in result
         print(opt)
-        if opt.name == 'exposure':
-            assert result['exposure'] == pytest.approx(1000.)
+        if opt.name == "exposure":
+            assert result["exposure"] == pytest.approx(1000.0)
         else:
             assert result[opt.name] == pytest.approx(opt.default_value)
 
 
 def test_list_streams(mock_context, driver):
-    data = MOCK_SENSORS['profiles'][Sensor.STEREO_MODULE]
+    data = MOCK_SENSORS["profiles"][Sensor.STEREO_MODULE]
     result = driver.list_streams(Sensor.STEREO_MODULE)
     assert len(data) == len(result)
     for profile in data:

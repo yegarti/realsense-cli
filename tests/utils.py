@@ -8,37 +8,38 @@ from realsense_cli.types import DeviceInfo, Sensor, Profile, Stream, Resolution,
 
 
 MOCK_DEVICE: DeviceInfo = DeviceInfo(
-    name='Intel RealSense D435',
-    serial='012345678',
-    fw='5.15.0.0',
-    connection='3.2',
+    name="Intel RealSense D435",
+    serial="012345678",
+    fw="5.15.0.0",
+    connection="3.2",
     sensors=[
-        'Stereo Module',
-        'RGB Camera',
-    ]
+        "Stereo Module",
+        "RGB Camera",
+    ],
 )
 
 MOCK_SENSORS: dict = {
-    'profiles': {
+    "profiles": {
         Sensor.STEREO_MODULE: [
-            Profile(Stream.DEPTH, Resolution(640, 480), 15, 'Z16', 0),
-            Profile(Stream.DEPTH, Resolution(640, 480), 30, 'Z16', 0),
+            Profile(Stream.DEPTH, Resolution(640, 480), 15, "Z16", 0),
+            Profile(Stream.DEPTH, Resolution(640, 480), 30, "Z16", 0),
         ]
     },
-    'options': {
+    "options": {
         Sensor.STEREO_MODULE: [
-            Option('exposure', '', 0., 10000., 1., 8500.),
-            Option('laser_power', '', 0., 360., 1., 120.),
-            Option('enable_auto_exposure', '', 0., 1., 1., 1.),
+            Option("exposure", "", 0.0, 10000.0, 1.0, 8500.0),
+            Option("laser_power", "", 0.0, 360.0, 1.0, 120.0),
+            Option("enable_auto_exposure", "", 0.0, 1.0, 1.0, 1.0),
         ]
-    }
+    },
 }
 
 
-def build_software_device(device: DeviceInfo,
-                          profiles: dict[Sensor, list[Profile]],
-                          options: dict[Sensor, list[Option]],
-                          ):
+def build_software_device(
+    device: DeviceInfo,
+    profiles: dict[Sensor, list[Profile]],
+    options: dict[Sensor, list[Option]],
+):
     soft_dev = rs.software_device()
     # using `update_info` because already registered, register again would append
     soft_dev.update_info(rs.camera_info.name, device.name)

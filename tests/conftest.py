@@ -11,11 +11,9 @@ from tests.utils import build_software_device, MOCK_DEVICE, MOCK_SENSORS
 @pytest.fixture
 def mock_context(monkeypatch):
     ctx = rs.context()
-    dev = build_software_device(MOCK_DEVICE,
-                                MOCK_SENSORS['profiles'],
-                                MOCK_SENSORS['options'])
+    dev = build_software_device(MOCK_DEVICE, MOCK_SENSORS["profiles"], MOCK_SENSORS["options"])
     dev.add_to(ctx)
-    monkeypatch.setattr(rs, 'context', lambda: ctx)
+    monkeypatch.setattr(rs, "context", lambda: ctx)
     yield
 
 
