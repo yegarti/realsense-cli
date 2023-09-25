@@ -181,7 +181,7 @@ class Realsense:
         if profiles:
             for profile in profiles:
                 rs_stream = self._streams_map[profile.stream]
-                rs_format = rs.format.any
+                rs_format = getattr(rs.format, profile.format.lower())
                 cfg.enable_stream(
                     rs_stream,
                     profile.index,

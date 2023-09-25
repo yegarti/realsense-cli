@@ -119,6 +119,23 @@ class Profile:
         if self.index == -1:
             object.__setattr__(self, "index", index)
 
+    def __str__(self):
+        return f"{self.stream} ({self.index}) {self.resolution} {self.format} @ {self.fps}"
+
+    @classmethod
+    def from_string(cls, profile: str) -> "Profile":
+        logger.debug(f"parsing profile from string: {profile}")
+        try:
+            parts = profile.split("-")
+            stream = CliStream(parts[0]).rs_enum
+            res = Resolution.from_string(parts[1] if len(parts) > 1 else "0x0")
+            fps = int(parts[2] if len(parts) > 2 else 0)
+            fmt = parts[3] if len(parts) > 3 else "any"
+            return cls(stream, res, fps, fmt)
+        except Exception as e:
+            logger.error(e)
+            raise ValueError(f"Failed to parse profile: '{profile}'")
+
 
 @dataclass
 class Frame:

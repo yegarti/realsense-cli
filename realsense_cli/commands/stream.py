@@ -31,47 +31,46 @@ def stream_list(
     list_profiles(profiles)
 
 
-@stream_app.command(name="play", help="Play streams")
+@stream_app.command(
+    name="play",
+    short_help="Play streams",
+    help=f"""
+                    Stream camera and show live view of basic data\n
+                    If no profiles are provided will start all streams at default settings\n
+                    \n
+                    Profiles must be provided in the following syntax:\n
+                    STREAM-RESOLUTION-FPS-FORMAT\n
+                    the STREAM is mandatory, other parts can be omitted\n
+                    \n
+                    For example:\n
+                    'depth' - stream depth stream at any FPS and resolution\n
+                    'depth-0x0-30' - stream depth at any resolution, 30 fps\n
+                    'color-640x480-0-rgb' - stream color at 640x480, any FPS, RGB format\n
+                    \n
+                    Stream names: {','.join([str(s.value) for s in CliStream])}\n
+                    """,
+)
 def stream_play(
-    streams: Annotated[
-        Optional[list[CliStream]],
-        typer.Argument(
-            help="Steams to play, no argument would stream all possible streams at pre-configured settings",
-            show_default=False,
-        ),
+    profiles: Annotated[
+        Optional[list[Profile]],
+        typer.Argument(help="Profiles to play", show_default=False, parser=Profile.from_string),
     ] = None,
-    fps: Annotated[
-        int, typer.Option("--fps", "-f", help="FPS to use for streams selected")
-    ] = 0,
-    resolution: Annotated[
-        Resolution,
-        typer.Option(
-            "--res",
-            "-r",
-            help="Resolution to use for streams selected, example: 640x480",
-            parser=Resolution.from_string,
-        ),
-    ] = "0x0",  # type: ignore
 ):
     driver = get_driver()
-    if not streams:
-        streams = []
+    logger.debug(f"stream {profiles}")
+    if not profiles:
+        profiles = []
 
-    if len(set(streams)) < len(streams):
-        print("Duplicated streams are not allowed")
-        raise typer.Abort()
+    view = StreamView([profile.stream for profile in profiles])
+    try:
+        driver.play(profiles)
+    except RuntimeError:
+        print("Failed to resolve profiles")
+        print("Requested profiles:")
+        for profile in profiles:
+            print(f"\t{profile}")
+        raise typer.Exit(1)
 
-    profiles = []
-    for stream in streams:
-        profile = Profile(
-            stream=stream.rs_enum,
-            resolution=resolution,
-            fps=fps,
-        )
-        profiles.append(profile)
-
-    view = StreamView([stream.rs_enum for stream in streams])
-    driver.play(profiles)
     try:
         with Live(view, refresh_per_second=30) as live:
             while True:
