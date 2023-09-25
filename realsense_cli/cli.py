@@ -64,7 +64,7 @@ def callback(
         print(f"Serial {serial} does not match any connected device:")
         raise typer.Abort()
 
-    if ctx.invoked_subcommand != "list":
+    if ctx.invoked_subcommand != "list" and {"-h", "--help"}.isdisjoint(sys.argv):
         logger.debug("checking device exist for subcommand '{}'", ctx.invoked_subcommand)
         dev_n = len(driver.query_devices())
         if dev_n == 0:
