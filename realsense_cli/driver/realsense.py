@@ -37,6 +37,9 @@ class Realsense:
             Stream.COLOR: rs.stream.color,
             Stream.GYRO: rs.stream.gyro,
             Stream.ACCEL: rs.stream.accel,
+            Stream.SAFETY: rs.stream.safety,
+            Stream.LABELED_POINT_CLOUD: rs.stream.labeled_point_cloud,
+            Stream.OCCUPANCY: rs.stream.occupancy,
         }
         self._metadata: list[rs.frame_metadata_value] = []
         self._stream_method: str = "pipe"

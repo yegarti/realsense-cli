@@ -20,6 +20,8 @@ class Sensor(Enum):
     STEREO_MODULE = "Stereo Module"
     RGB_CAMERA = "RGB Camera"
     MOTION_SENSOR = "Motion Module"
+    SAFETY_CAMERA = "Safety Camera"
+    DEPTH_MAPPING_CAMERA = "Depth Mapping Camera"
 
 
 @dataclass(frozen=True)
@@ -40,6 +42,9 @@ class Stream(Enum):
     COLOR = "Color"
     GYRO = "Gyro"
     ACCEL = "Accel"
+    SAFETY = "Safety"
+    LABELED_POINT_CLOUD = "Labeled Point Cloud"
+    OCCUPANCY = "Occupancy"
 
 
 class CliStream(Enum):
@@ -49,6 +54,9 @@ class CliStream(Enum):
     COLOR = "color"
     GYRO = "gyro"
     ACCEL = "accel"
+    SAFETY = "safety"
+    LABELED_POINT_CLOUD = "lpc"
+    OCCUPANCY = "occupancy"
 
     @property
     def rs_enum(self) -> Stream:
@@ -65,6 +73,12 @@ class CliStream(Enum):
                 return Stream.INFRARED
             case self.INFRARED2:
                 return Stream.INFRARED2
+            case self.SAFETY:
+                return Stream.SAFETY
+            case self.LABELED_POINT_CLOUD:
+                return Stream.LABELED_POINT_CLOUD
+            case self.OCCUPANCY:
+                return Stream.OCCUPANCY
             case _:
                 raise RuntimeError(f"Unmatched stream: {self}")
 
@@ -73,6 +87,8 @@ class CliSensor(Enum):
     DEPTH = "depth"
     COLOR = "color"
     MOTION = "motion"
+    SAFETY = "safety"
+    DEPTH_MAPPING = "depth_mapping"
 
     @property
     def rs_enum(self) -> Sensor:
@@ -83,6 +99,10 @@ class CliSensor(Enum):
                 return Sensor.RGB_CAMERA
             case self.MOTION:
                 return Sensor.MOTION_SENSOR
+            case self.SAFETY:
+                return Sensor.SAFETY_CAMERA
+            case self.DEPTH_MAPPING:
+                return Sensor.DEPTH_MAPPING_CAMERA
             case _:
                 raise RuntimeError(f"Unmatched sensor: {self}")
 

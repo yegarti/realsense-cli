@@ -12,6 +12,9 @@ def group_profiles(profiles: list[Profile]) -> dict[Profile, list[int]]:
         Stream.COLOR: 3,
         Stream.GYRO: 4,
         Stream.ACCEL: 5,
+        Stream.SAFETY: 6,
+        Stream.LABELED_POINT_CLOUD: 7,
+        Stream.OCCUPANCY: 8,
     }
 
     def sort_key(pro: Profile):
