@@ -5,6 +5,7 @@ from loguru import logger
 import typer
 
 from realsense_cli.commands.config import config_app
+from realsense_cli.commands.safety import safety_app
 from realsense_cli.commands.stream import stream_app
 from realsense_cli.driver import get_driver
 from realsense_cli.printer import list_devices
@@ -28,6 +29,7 @@ app.add_typer(config_app, name="config")
 
 app.add_typer(stream_app, name="stream")
 
+app.add_typer(safety_app, name="safety")
 
 @app.command(name="reset")
 def rs_reset() -> None:

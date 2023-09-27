@@ -13,6 +13,9 @@ from realsense_cli.types import (
     Resolution,
     FrameSet,
     Frame,
+    SafetyPreset,
+    SafetyZone,
+    SafetyMaskingZone,
 )
 
 import pyrealsense2 as rs  # type: ignore
@@ -382,3 +385,112 @@ class Realsense:
                 break
         else:
             raise ValueError(f"No device with serial {serial} is connected")
+
+    def set_safety_preset(self, index: int, preset: SafetyPreset):
+        safety: rs.safety_sensor = self._get_sensor(Sensor.SAFETY_CAMERA).as_safety_sensor()
+
+        env = rs.safety_environment()
+        env.grid_cell_size = preset.grid_cell_size
+        env.surface_height = preset.surface_height
+        env.surface_inclination = preset.surface_inclination
+        env.safety_trigger_duration = preset.safety_trigger_duration
+        env.surface_confidence = 1
+
+        platform = rs.safety_platform()
+        platform.robot_height = preset.robot_height
+        rx = rs.float3(*preset.rotation[0])
+        ry = rs.float3(*preset.rotation[1])
+        rz = rs.float3(*preset.rotation[2])
+        rotation = rs.float3x3(rx, ry, rz)
+        translation = rs.float3(*preset.translation)
+        platform.transformation_link = rs.safety_extrinsics_table(rotation, translation)
+
+        zones = []
+        for zone in preset.safety_zones:
+            rs_zone = rs.safety_zone()
+            rs_zone.minimum_object_size = rs.float2(50, 600)
+            rs_zone.zone_polygon = [rs.float2(*point) for point in zone.points]
+            zones.append(rs_zone)
+
+
+        masks = []
+        for mask in preset.masking_zones:
+            rs_mask = rs.masking_zone()
+            rs_mask.attributes = mask.attributes
+            rs_mask.minimal_range = mask.minimal_range
+            pixels = []
+            for pixel in mask.pixels:
+                pix = rs.pixel2D()
+                pix.i, pix.j = pixel
+                pixels.append(pix)
+            rs_mask.region_of_interests = pixels
+            masks.append(rs_mask)
+
+        rs_preset = rs.safety_preset()
+        rs_preset.environment = env
+        rs_preset.platform_config = platform
+        rs_preset.safety_zones = zones
+        rs_preset.masking_zones = masks
+        # TODO not working
+        # safety.set_safety_preset(index, rs_preset)
+
+    def get_safety_preset(self, index: int) -> SafetyPreset:
+        safety: rs.safety_sensor = self._get_sensor(Sensor.SAFETY_CAMERA).as_safety_sensor()
+        preset: rs.safety_preset = safety.get_safety_preset(index)
+
+        # TODO move to dataclass as static method
+        env: rs.safety_environment = preset.environment
+        platform: rs.safety_platform = preset.platform_config
+        zones: list[rs.safety_zone] = preset.safety_zones
+        masks: list[rs.masking_zone] = preset.masking_zones
+
+        def round2(num):
+            return round(num, 2)
+
+        raw_matrix = platform.transformation_link
+        rx = raw_matrix.rotation.x
+        ry = raw_matrix.rotation.y
+        rz = raw_matrix.rotation.z
+        translation = [round2(p) for p in [raw_matrix.translation.x,
+                                           raw_matrix.translation.y,
+                                           raw_matrix.translation.z]]
+        rotation = [
+            [rx.x, ry.x, rz.x],
+            [rx.y, ry.y, rz.y],
+            [rx.z, ry.z, rz.z],
+        ]
+        rotation = [[round2(element) for element in row] for row in rotation]
+
+        new_zones = []
+        for zone in zones:
+            points = []
+            for polygon in zone.zone_polygon:
+                points.append((round2(polygon.x), round2(polygon.y)))
+            new_zones.append(SafetyZone(
+                points=points,
+                trigger_confidence=zone.safety_trigger_confidence,
+            ))
+
+        nmasks = []
+        for mask in masks:
+            pixels = []
+            for pixel in mask.region_of_interests:
+                pixels.append((pixel.i, pixel.j))
+            nmasks.append(SafetyMaskingZone(
+                attributes=mask.attributes,
+                pixels=pixels,
+                minimal_range=mask.minimal_range
+            ))
+
+        return SafetyPreset(
+            new_zones,
+            nmasks,
+            rotation,
+            translation,
+            round2(platform.robot_height),
+            round2(env.grid_cell_size),
+            round2(env.surface_height),
+            round2(env.surface_inclination),
+            round2(env.safety_trigger_duration),
+            str(preset))
+

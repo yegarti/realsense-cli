@@ -4,7 +4,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from realsense_cli.types import DeviceInfo, Option, Sensor, Profile, Stream
+from realsense_cli.types import DeviceInfo, Option, SafetyPreset, Sensor, Profile, Stream
 from realsense_cli.utils import group_profiles
 
 
@@ -80,3 +80,7 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
         )
 
     Console().print(table)
+
+
+def show_safety_preset(safety_preset: SafetyPreset):
+    pass

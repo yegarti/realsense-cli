@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Optional
 
 from loguru import logger
 
@@ -185,3 +185,29 @@ class Frame:
 
 
 FrameSet = dict[Stream, Frame]
+
+
+class SafetyMaskingZone(NamedTuple):
+    attributes: int
+    pixels: list[tuple[int, int]]
+    minimal_range: float
+
+
+class SafetyZone(NamedTuple):
+    points: list[tuple[float, float]]
+    trigger_confidence: int = 1
+
+
+@dataclass
+class SafetyPreset:
+    safety_zones: list[SafetyZone]
+    masking_zones: list[SafetyMaskingZone]
+    rotation: list[list[float]]
+    translation: list[float]
+    robot_height: list
+    grid_cell_size: float
+    surface_height: float
+    surface_inclination: float
+    safety_trigger_duration: float
+    raw_form: Optional[str] = field(repr=False)
+
