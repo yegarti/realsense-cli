@@ -218,7 +218,7 @@ class Realsense:
         rs_frame: rs.frame
         for rs_frame in rs_frameset:
             rs_profile: rs.stream_profile = rs_frame.get_profile()
-            profile = self._convert_profile(rs_profile)
+            profile = Profile.from_rs(rs_profile)
             frame = Frame(
                 profile=profile,
                 timestamp=rs_frame.get_timestamp(),
@@ -234,21 +234,6 @@ class Realsense:
         Send hardware reset to device
         """
         self._active_device.hardware_reset()
-
-    def _convert_profile(self, profile: rs.stream_profile) -> Profile:
-        """Convert lrs profile to rscli profile"""
-        width, height = 0, 0
-        if profile.is_video_stream_profile():
-            vsp: rs.video_stream_profile = profile.as_video_stream_profile()
-            width, height = vsp.width(), vsp.height()
-
-        return Profile(
-            stream=Stream(profile.stream_name()),
-            resolution=Resolution(width, height),
-            fps=profile.fps(),
-            format=profile.format().name,
-            index=profile.stream_index(),
-        )
 
     def _get_sensor(self, sensor: Sensor) -> rs.sensor:
         if sensor not in self._sensors[self._active_device]:
