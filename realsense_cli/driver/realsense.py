@@ -72,11 +72,19 @@ class Realsense:
         for device, sensors in self._sensors.items():
             rs_sensors = [s for s in sensors.values()]
             logger.debug("adding device info for device {}", device)
+
+            def _safe_get_info(info: rs.camera_info):
+                try:
+                    return device.get_info(info)
+                except Exception as e:
+                    logger.error(e)
+                return 'N/A'
+
             info = DeviceInfo(
                 name=device.get_info(rs.camera_info.name),
                 serial=device.get_info(rs.camera_info.serial_number),
-                fw=device.get_info(rs.camera_info.firmware_version),
-                connection=device.get_info(rs.camera_info.usb_type_descriptor),
+                fw=_safe_get_info(rs.camera_info.firmware_version),
+                connection=_safe_get_info(rs.camera_info.usb_type_descriptor),
                 sensors=[s.get_info(rs.camera_info.name) for s in rs_sensors],
             )
             logger.debug("adding device info: {}", info)
