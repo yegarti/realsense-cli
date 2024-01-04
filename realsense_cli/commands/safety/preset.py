@@ -7,6 +7,7 @@ import typer
 
 from realsense_cli import printer
 from realsense_cli.driver import get_driver
+from realsense_cli.types import SafetyPreset
 
 safety_preset_app = typer.Typer(help="Safety Preset options", no_args_is_help=True)
 
@@ -35,3 +36,16 @@ def preset_export(
     data = asdict(preset)
     del data["raw_form"]
     file.write_text(json.dumps(data))
+
+
+@safety_preset_app.command(name="import", help="Import preset from JSON file")
+def preset_import(
+    preset_index: Annotated[int, typer.Argument(help="Preset index", show_default=False)],
+    file: Annotated[
+        Path, typer.Argument(help="Path to JSON preset", file_okay=True, exists=True)
+    ],
+):
+    driver = get_driver()
+    data = json.loads(file.read_text())
+    preset = SafetyPreset.from_dict(data)
+    driver.set_safety_preset(preset_index, preset)

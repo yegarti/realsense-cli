@@ -209,5 +209,11 @@ class SafetyPreset:
     surface_height: float
     surface_inclination: float
     safety_trigger_duration: float
-    raw_form: Optional[str] = field(repr=False, default='N/A')
+    raw_form: Optional[str] = field(repr=False, default="N/A")
 
+    @classmethod
+    def from_dict(cls, data: dict):
+        preset = cls(**data)
+        preset.safety_zones = [SafetyZone(**zone) for zone in data["safety_zones"]]
+        preset.masking_zones = [SafetyMaskingZone(**zone) for zone in data["masking_zones"]]
+        return preset
