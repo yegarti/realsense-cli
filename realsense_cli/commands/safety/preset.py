@@ -1,7 +1,5 @@
-import json
-from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 
@@ -12,10 +10,12 @@ from realsense_cli.types import SafetyPreset
 safety_preset_app = typer.Typer(help="Safety Preset options", no_args_is_help=True)
 
 
-@safety_preset_app.command(name="print", help="Print safety preset and export to JSON file")
+@safety_preset_app.command(name="print", help="Print safety preset")
 def preset_print(
     preset_index: Annotated[int, typer.Argument(help="Preset index", show_default=False)],
     raw: Annotated[bool, typer.Option(help="Print prest directly from driver")] = False,
+    _json: Annotated[Optional[Path], typer.Option('--json', help="Export to JSON, same as 'export' cmd",
+                                                  file_okay=True)] = None,
 ):
     driver = get_driver()
     preset = driver.get_safety_preset(preset_index)
@@ -23,19 +23,19 @@ def preset_print(
         print(preset.raw_form)
     else:
         printer.print_safety_preset(preset)
+    if _json:
+        _json.write_text(preset.to_json())
     pass
 
 
 @safety_preset_app.command(name="export", help="Export to JSON file")
 def preset_export(
     preset_index: Annotated[int, typer.Argument(help="Preset index", show_default=False)],
-    file: Annotated[Path, typer.Argument(help="Export preset to JSON", file_okay=True)],
+    file: Annotated[Path, typer.Argument(help="Path to JSON file", file_okay=True)],
 ):
     driver = get_driver()
     preset = driver.get_safety_preset(preset_index)
-    data = asdict(preset)
-    del data["raw_form"]
-    file.write_text(json.dumps(data))
+    file.write_text(preset.to_json())
 
 
 @safety_preset_app.command(name="import", help="Import preset from JSON file")
@@ -46,6 +46,5 @@ def preset_import(
     ],
 ):
     driver = get_driver()
-    data = json.loads(file.read_text())
-    preset = SafetyPreset.from_dict(data)
+    preset = SafetyPreset.from_json(file.read_text())
     driver.set_safety_preset(preset_index, preset)

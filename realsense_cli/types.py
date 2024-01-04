@@ -1,4 +1,5 @@
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import Any, NamedTuple, Optional
 
@@ -212,8 +213,15 @@ class SafetyPreset:
     raw_form: Optional[str] = field(repr=False, default="N/A")
 
     @classmethod
-    def from_dict(cls, data: dict):
-        preset = cls(**data)
-        preset.safety_zones = [SafetyZone(**zone) for zone in data["safety_zones"]]
-        preset.masking_zones = [SafetyMaskingZone(**zone) for zone in data["masking_zones"]]
+    def from_json(cls, data: str):
+        jdata = json.loads(data)
+        preset = cls(**jdata)
+        preset.safety_zones = [SafetyZone(**zone) for zone in jdata["safety_zones"]]
+        preset.masking_zones = [SafetyMaskingZone(**zone) for zone in jdata["masking_zones"]]
         return preset
+
+    def to_json(self) -> str:
+        data = asdict(self)
+        del data["raw_form"]
+        return json.dumps(data)
+
