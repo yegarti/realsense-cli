@@ -33,6 +33,7 @@ _default_config = {
                     max_value=200000.0,
                     step=1.0,
                     default_value=8500.0,
+                    vtype=int,
                 ),
                 Option(
                     name="enable_auto_exposure",
@@ -41,6 +42,7 @@ _default_config = {
                     max_value=1.0,
                     step=1.0,
                     default_value=1.0,
+                    vtype=int,
                 ),
                 Option(
                     name="depth_units",
@@ -49,6 +51,7 @@ _default_config = {
                     max_value=0.001,
                     step=0.0001,
                     default_value=0.001,
+                    vtype=float,
                 ),
             ],
             "profiles": [
@@ -69,6 +72,7 @@ _default_config = {
                     max_value=64.0,
                     step=1.0,
                     default_value=0.0,
+                    vtype=int,
                 ),
             ],
             "profiles": [

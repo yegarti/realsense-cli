@@ -30,6 +30,7 @@ class Option:
     max_value: Any
     step: Any
     default_value: Any
+    vtype: type
 
 
 class Stream(Enum):

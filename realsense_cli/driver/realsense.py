@@ -98,6 +98,9 @@ class Realsense:
                 logger.debug("skipping read only option")
                 continue
             rng: rs.option_range = rs_sensor.get_option_range(option)
+            vtype = float
+            if rng.step == int(rng.step) and rng.min == int(rng.min):
+                vtype = int
             opt = Option(
                 name=option.name,
                 description=rs_sensor.get_option_description(option),
@@ -105,6 +108,7 @@ class Realsense:
                 max_value=round(rng.max, 6),
                 step=round(rng.step, 6),
                 default_value=round(rng.default, 6),
+                vtype=vtype
             )
             logger.debug("adding Option: {}", opt)
             res.append(opt)

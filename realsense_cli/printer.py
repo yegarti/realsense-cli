@@ -33,20 +33,20 @@ def list_options(
     title = f"{sensor.value} controls" if sensor else "Controls"
     table = Table(title=title, box=box.SIMPLE)
     table.add_column("Name")
-    table.add_column("Description")
     table.add_column("Min Value")
     table.add_column("Max Value")
     table.add_column("Step")
     table.add_column("Default Value")
+    table.add_column("Description")
 
     for opt in options:
         table.add_row(
             opt.name,
+            str(opt.vtype(opt.min_value)),
+            str(opt.vtype(opt.max_value)),
+            str(opt.vtype(opt.step)),
+            str(opt.vtype(opt.default_value)),
             opt.description,
-            str(opt.min_value),
-            str(opt.max_value),
-            str(opt.step),
-            str(opt.default_value),
         )
 
     Console().print(table)

@@ -34,9 +34,9 @@ def test_config_list(driver, sensor):
     for option in controls:
         assert option.name in stdout
         assert option.description in stdout
-        assert str(option.min_value) in stdout
-        assert str(option.max_value) in stdout
-        assert str(option.step) in stdout
+        assert str(option.vtype(option.min_value)) in stdout
+        assert str(option.vtype(option.max_value)) in stdout
+        assert str(option.vtype(option.step)) in stdout
 
 
 @pytest.mark.parametrize(

@@ -27,9 +27,10 @@ MOCK_SENSORS: dict = {
     },
     "options": {
         Sensor.STEREO_MODULE: [
-            Option("exposure", "", 0.0, 10000.0, 1.0, 8500.0),
-            Option("laser_power", "", 0.0, 360.0, 1.0, 120.0),
-            Option("enable_auto_exposure", "", 0.0, 1.0, 1.0, 1.0),
+            Option("exposure", "", 0.0, 10000.0, 1.0, 8500, int),
+            Option("depth_units", "", 0.0, 10000.0, 1.0, 8500, int),
+            Option("laser_power", "", 0.0, 360.0, 1.0, 120.0, int),
+            Option("enable_auto_exposure", "", 0.0, 1.0, 1.0, 1.0, int),
         ]
     },
 }
