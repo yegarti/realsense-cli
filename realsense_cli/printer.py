@@ -82,5 +82,5 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
     Console().print(table)
 
 
-def show_safety_preset(safety_preset: SafetyPreset):
-    pass
+def print_safety_preset(safety_preset: SafetyPreset):
+    Console().print(safety_preset, width=120)

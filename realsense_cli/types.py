@@ -190,7 +190,7 @@ FrameSet = dict[Stream, Frame]
 class SafetyMaskingZone(NamedTuple):
     attributes: int
     pixels: list[tuple[int, int]]
-    minimal_range: float
+    minimal_range: float = 0
 
 
 class SafetyZone(NamedTuple):
@@ -204,10 +204,10 @@ class SafetyPreset:
     masking_zones: list[SafetyMaskingZone]
     rotation: list[list[float]]
     translation: list[float]
-    robot_height: list
+    robot_height: float
     grid_cell_size: float
     surface_height: float
     surface_inclination: float
     safety_trigger_duration: float
-    raw_form: Optional[str] = field(repr=False)
+    raw_form: Optional[str] = field(repr=False, default='N/A')
 
