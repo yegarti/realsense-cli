@@ -37,9 +37,12 @@ class StreamView(Panel):
                 self._title_set[stream] = True
 
             metrics = {"index": frame.index, "fps": self._calc_fps(frame)}
-            self._panels[
-                stream
-            ].renderable = f"Frame #{metrics['index']:<8} FPS: {metrics['fps']:<4.2f}"
+            panel_str: list[str] = [f"Frame #{metrics['index']:<8} FPS: {metrics['fps']:<4.2f}"]
+            longest = max([len(m) for m in frame.metadata.keys()])
+            for md, val in frame.metadata.items():
+                name = md.replace("_", " ").title()
+                panel_str.append(f"{name.ljust(longest + 1)}={str(val).rjust(15)}")
+            self._panels[stream].renderable = "\n".join(panel_str)
 
     def _regroup(self, streams: Optional[list[Stream]]):
         logger.info("Regroup for streams {}", streams)

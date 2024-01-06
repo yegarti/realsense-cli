@@ -161,6 +161,7 @@ class Frame:
     profile: Profile
     timestamp: float
     index: int
+    metadata: dict[str, Any]
 
 
 FrameSet = dict[Stream, Frame]

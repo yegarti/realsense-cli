@@ -1,4 +1,4 @@
-import operator
+import time
 from typing import Optional
 
 from loguru import logger
@@ -35,6 +35,7 @@ class Realsense:
             Stream.GYRO: rs.stream.gyro,
             Stream.ACCEL: rs.stream.accel,
         }
+        self._metadata: list[rs.frame_metadata_value] = []
 
         self._setup()
         if self._devices:
@@ -52,6 +53,10 @@ class Realsense:
         self._frame_queue: rs.frame_queue = rs.frame_queue(capacity=1)
 
     def _setup(self) -> None:
+        self._query()
+        self._prep_valid_md_attrs()
+
+    def _query(self):
         for dev in self._ctx.devices:
             logger.debug("Adding device: {}", dev)
             self._devices.append(dev)
@@ -61,7 +66,14 @@ class Realsense:
             for rs_sensor in dev.sensors:
                 logger.debug("Adding sensor {} for device {}", rs_sensor, dev)
                 self._sensors[dev][Sensor(rs_sensor.name)] = rs_sensor
+
         logger.info("Found {} devices", len(self._devices))
+
+    def _prep_valid_md_attrs(self):
+        for name in dir(rs.frame_metadata_value):
+            attr = getattr(rs.frame_metadata_value, name)
+            if isinstance(attr, rs.frame_metadata_value):
+                self._metadata.append(attr)
 
     def query_devices(self) -> list[DeviceInfo]:
         """
@@ -78,7 +90,7 @@ class Realsense:
                     return device.get_info(info)
                 except Exception as e:
                     logger.error(e)
-                return 'N/A'
+                return "N/A"
 
             info = DeviceInfo(
                 name=device.get_info(rs.camera_info.name),
@@ -116,7 +128,7 @@ class Realsense:
                 max_value=round(rng.max, 6),
                 step=round(rng.step, 6),
                 default_value=round(rng.default, 6),
-                vtype=vtype
+                vtype=vtype,
             )
             logger.debug("adding Option: {}", opt)
             res.append(opt)
@@ -227,17 +239,31 @@ class Realsense:
         ).as_frameset()
         logger.debug("frameset received")
 
+        t0 = time.time()
         rs_frame: rs.frame
         for rs_frame in rs_frameset:
+            t1 = time.time()
             rs_profile: rs.stream_profile = rs_frame.get_profile()
             profile = Profile.from_rs(rs_profile)
+            metadata = {}
+            for md in self._metadata:
+                if rs_frame.supports_frame_metadata(md):
+                    metadata[md.name] = rs_frame.get_frame_metadata(md)
             frame = Frame(
                 profile=profile,
                 timestamp=rs_frame.get_timestamp(),
                 index=rs_frame.get_frame_number(),
+                metadata=metadata,
             )
-            logger.debug("{}\t#{} - {}", frame.profile.stream.value, frame.index, frame)
+            logger.debug(
+                "{}\t#{} {:.2}ms - {}",
+                frame.profile.stream.value,
+                frame.index,
+                (time.time() - t1) * 1000,
+                frame,
+            )
             result[profile.stream] = frame
+        logger.debug(f"Total callback time: {(time.time() - t0) * 1000:.2}ms")
 
         return result
 
