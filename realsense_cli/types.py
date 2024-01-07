@@ -223,5 +223,7 @@ class SafetyPreset:
     def to_json(self) -> str:
         data = asdict(self)
         del data["raw_form"]
+        data["safety_zones"] = [s._asdict() for s in data["safety_zones"]]
+        data["masking_zones"] = [s._asdict() for s in data["masking_zones"]]
         return json.dumps(data)
 

@@ -1,6 +1,7 @@
 import time
 from collections import defaultdict
 from typing import Optional
+from contextlib import contextmanager
 
 from loguru import logger
 
@@ -431,8 +432,8 @@ class Realsense:
         rs_preset.platform_config = platform
         rs_preset.safety_zones = zones
         rs_preset.masking_zones = masks
-        # TODO not working
-        # safety.set_safety_preset(index, rs_preset)
+
+        safety.set_safety_preset(index, rs_preset)
 
     def get_safety_preset(self, index: int) -> SafetyPreset:
         safety: rs.safety_sensor = self._get_sensor(Sensor.SAFETY_CAMERA).as_safety_sensor()
@@ -493,4 +494,14 @@ class Realsense:
             round2(env.surface_inclination),
             round2(env.safety_trigger_duration),
             str(preset))
+
+    @contextmanager
+    def service_mode(self, wait: float = 0):
+        safety: rs.safety_sensor = self._get_sensor(Sensor.SAFETY_CAMERA).as_safety_sensor()
+        safety.set_option(rs.option.safety_mode, 2)
+        time.sleep(wait)
+        try:
+            yield
+        finally:
+            safety.set_option(rs.option.safety_mode, 0)
 

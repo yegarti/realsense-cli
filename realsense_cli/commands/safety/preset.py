@@ -47,4 +47,5 @@ def preset_import(
 ):
     driver = get_driver()
     preset = SafetyPreset.from_json(file.read_text())
-    driver.set_safety_preset(preset_index, preset)
+    with driver.service_mode(wait=1):
+        driver.set_safety_preset(preset_index, preset)
