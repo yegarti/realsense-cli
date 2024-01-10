@@ -228,6 +228,18 @@ class Realsense:
 
             for profile in sprofiles:
                 logger.debug(f"Looking a match for {profile}")
+
+                skip_index = profile.index == -1
+                skip_fps = profile.fps == 0
+                skip_width = profile.resolution.width == 0
+                skip_height = profile.resolution.height == 0
+                skip_format = profile.format == "any"
+                fmt = getattr(rs.format, profile.format.lower())
+
+                logger.debug(
+                    f"{skip_index=}, {skip_fps=}, {skip_format=}, {skip_height=}, {skip_width=}"
+                )
+
                 for rs_profile in rs_profiles:
                     if rs_profile.is_video_stream_profile():
                         sp: rs.video_stream_profile = rs_profile.as_video_stream_profile()
@@ -236,16 +248,22 @@ class Realsense:
                         sp = rs_profile
                         width, height = 0, 0
 
+                    logger.debug(f"checking {rs_profile}...")
                     if (
                         sp.stream_type() == self._streams_map[profile.stream]
-                        and sp.stream_index() == (profile.index if profile.index != -1 else 0)
-                        and sp.format() == getattr(rs.format, profile.format.lower())
-                        and sp.fps() == profile.fps
-                        and width == profile.resolution.width
-                        and height == profile.resolution.height
+                        and (skip_index or (sp.stream_index() == profile.index))
+                        and (skip_format or (sp.format() == fmt))
+                        and (skip_fps or (sp.fps() == profile.fps))
+                        and (skip_width or (width == profile.resolution.width))
+                        and (skip_height or (height == profile.resolution.height))
                     ):
                         logger.debug(f"Found match: {sp}")
                         rs_stream_profiles[sensor].append(sp)
+                        break
+                else:
+                    raise RuntimeError(
+                        f"Failed to find streaming profile: '{profile}' for {sensor}"
+                    )
 
         for sensor, rs_profiles in rs_stream_profiles.items():
             logger.info(f"Starting stream for {sensor} with {rs_profiles}")

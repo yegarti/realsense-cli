@@ -71,8 +71,8 @@ def stream_play(
     view = StreamView([profile.stream for profile in profiles])
     try:
         driver.play(profiles, pipeline=api)
-    except RuntimeError:
-        print("Failed to resolve profiles")
+    except RuntimeError as e:
+        print(str(e))
         print("Requested profiles:")
         for profile in profiles:
             print(f"\t{profile}")
