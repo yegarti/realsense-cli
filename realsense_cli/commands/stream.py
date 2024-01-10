@@ -55,6 +55,13 @@ def stream_play(
         Optional[list[Profile]],
         typer.Argument(help="Profiles to play", show_default=False, parser=Profile.from_string),
     ] = None,
+    api: Annotated[
+        bool,
+        typer.Option(
+            "--pipe/--sensor",
+            help="Stream method, high-level pipeline API or low-level sensor API",
+        ),
+    ] = True,
 ):
     driver = get_driver()
     logger.debug(f"stream {profiles}")
@@ -63,7 +70,7 @@ def stream_play(
 
     view = StreamView([profile.stream for profile in profiles])
     try:
-        driver.play(profiles)
+        driver.play(profiles, pipeline=api)
     except RuntimeError:
         print("Failed to resolve profiles")
         print("Requested profiles:")

@@ -1,4 +1,5 @@
 import time
+from collections import defaultdict
 from typing import Optional
 
 from loguru import logger
@@ -15,6 +16,8 @@ from realsense_cli.types import (
 )
 
 import pyrealsense2 as rs  # type: ignore
+
+from realsense_cli.utils import find_origin_sensor
 
 
 class Realsense:
@@ -36,6 +39,7 @@ class Realsense:
             Stream.ACCEL: rs.stream.accel,
         }
         self._metadata: list[rs.frame_metadata_value] = []
+        self._stream_method: str = "pipe"
 
         self._setup()
         if self._devices:
@@ -195,12 +199,63 @@ class Realsense:
             logger.debug("adding profile {}", res[-1])
         return res
 
-    def play(self, profiles: Optional[list[Profile]] = None) -> None:
+    def play(self, profiles: Optional[list[Profile]] = None, pipeline: bool = True) -> None:
         """
         Start streaming selected profiles
         """
-        cfg = rs.config()
         logger.info("Playing profiles: {}", profiles)
+        if pipeline:
+            self._stream_pipe(profiles)
+        else:
+            self._stream_sensor(profiles)
+        self._streaming = True
+
+    def _stream_sensor(self, profiles: list[Profile]):
+        self._stream_method = "sensor"
+        sensor_profiles = {}
+        for sensor in self._sensors[self._active_device]:
+            sensor_profiles[sensor] = self.list_streams(sensor)
+        origin_streams: dict[Stream, Sensor] = find_origin_sensor(sensor_profiles)
+
+        stream_profiles: dict[Sensor, list[Profile]] = {s: [] for s in origin_streams.values()}
+        for profile in profiles:
+            stream_profiles[origin_streams[profile.stream]].append(profile)
+
+        rs_stream_profiles: dict[Sensor, list[rs.stream_profile]] = defaultdict(list)
+        for sensor, sprofiles in stream_profiles.items():
+            rs_sensor: rs.sensor = self._get_sensor(sensor)
+            rs_profiles = rs_sensor.get_stream_profiles()
+
+            for profile in sprofiles:
+                logger.debug(f"Looking a match for {profile}")
+                for rs_profile in rs_profiles:
+                    if rs_profile.is_video_stream_profile():
+                        sp: rs.video_stream_profile = rs_profile.as_video_stream_profile()
+                        width, height = sp.width(), sp.height()
+                    else:
+                        sp = rs_profile
+                        width, height = 0, 0
+
+                    if (
+                        sp.stream_type() == self._streams_map[profile.stream]
+                        and sp.stream_index() == (profile.index if profile.index != -1 else 0)
+                        and sp.format() == getattr(rs.format, profile.format.lower())
+                        and sp.fps() == profile.fps
+                        and width == profile.resolution.width
+                        and height == profile.resolution.height
+                    ):
+                        logger.debug(f"Found match: {sp}")
+                        rs_stream_profiles[sensor].append(sp)
+
+        for sensor, rs_profiles in rs_stream_profiles.items():
+            logger.info(f"Starting stream for {sensor} with {rs_profiles}")
+            rs_sensor = self._get_sensor(sensor)
+            rs_sensor.open(rs_profiles)
+            rs_sensor.start(self._frame_queue)
+
+    def _stream_pipe(self, profiles):
+        self._stream_method = "pipe"
+        cfg = rs.config()
         cfg.enable_device(self._active_device.get_info(rs.camera_info.serial_number))
         if profiles:
             for profile in profiles:
@@ -218,14 +273,19 @@ class Realsense:
             cfg.enable_all_streams()
         logger.info("Starting stream")
         self._pipe_profile = self._pipeline.start(cfg, self._frame_queue)
-        self._streaming = True
 
     def stop(self) -> None:
         """
         Stop streaming
         """
         logger.info("Stopping stream")
-        self._pipeline.stop()
+        if self._stream_method == "pipe":
+            self._pipeline.stop()
+        else:
+            for rs_sensor in self._sensors[self._active_device].values():
+                if rs_sensor.get_active_streams():
+                    rs_sensor.stop()
+                    rs_sensor.close()
         self._streaming = False
 
     def wait_for_frameset(self, timeout: float = 3.0) -> Optional[FrameSet]:
@@ -234,14 +294,17 @@ class Realsense:
         return None when no frameset arrive after timeout
         """
         result: FrameSet = {}
-        rs_frameset: rs.composite_frame = self._frame_queue.wait_for_frame(
-            int(timeout * 1000)
-        ).as_frameset()
+        rs_frame: rs.frame = self._frame_queue.wait_for_frame(int(timeout * 1000))
+        frames: list[rs.frame]
+        if rs_frame.is_frameset():
+            frames = [f for f in rs_frame.as_frameset()]
+        else:
+            frames = [rs_frame]
         logger.debug("frameset received")
 
         t0 = time.time()
         rs_frame: rs.frame
-        for rs_frame in rs_frameset:
+        for rs_frame in frames:
             t1 = time.time()
             rs_profile: rs.stream_profile = rs_frame.get_profile()
             profile = Profile.from_rs(rs_profile)

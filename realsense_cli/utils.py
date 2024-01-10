@@ -1,4 +1,4 @@
-from realsense_cli.types import Profile, Stream
+from realsense_cli.types import Profile, Stream, Sensor
 
 
 def group_profiles(profiles: list[Profile]) -> dict[Profile, list[int]]:
@@ -38,3 +38,13 @@ def group_profiles(profiles: list[Profile]) -> dict[Profile, list[int]]:
         buckets.setdefault(mapi(profile), []).append(profile.fps)
 
     return buckets
+
+
+def find_origin_sensor(sensor_profiles: dict[Sensor, list[Profile]]) -> dict[Stream, Sensor]:
+    res = {}
+    for sensor, profiles in sensor_profiles.items():
+        for profile in profiles:
+            if profile.stream in res:
+                continue
+            res[profile.stream] = sensor
+    return res

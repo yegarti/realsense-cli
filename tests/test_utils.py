@@ -1,7 +1,7 @@
 import pytest
 
-from realsense_cli.types import Profile, Stream, Resolution
-from realsense_cli.utils import group_profiles
+from realsense_cli.types import Profile, Stream, Resolution, Sensor
+from realsense_cli.utils import group_profiles, find_origin_sensor
 
 
 def test_group_profiles():
@@ -37,3 +37,28 @@ def test_profile_from_string(profile, expected):
 def test_profile_from_string_error():
     with pytest.raises(ValueError):
         Profile.from_string("depth-30")
+
+
+@pytest.mark.parametrize(
+    "profiles, expected",
+    [
+        ({Sensor.STEREO_MODULE: [Profile(Stream.DEPTH)]}, {Stream.DEPTH: Sensor.STEREO_MODULE}),
+        (
+            {Sensor.STEREO_MODULE: [Profile(Stream.DEPTH), Profile(Stream.INFRARED)]},
+            {Stream.DEPTH: Sensor.STEREO_MODULE, Stream.INFRARED: Sensor.STEREO_MODULE},
+        ),
+        (
+            {
+                Sensor.STEREO_MODULE: [Profile(Stream.DEPTH), Profile(Stream.INFRARED2)],
+                Sensor.RGB_CAMERA: [Profile(Stream.COLOR)],
+            },
+            {
+                Stream.DEPTH: Sensor.STEREO_MODULE,
+                Stream.INFRARED2: Sensor.STEREO_MODULE,
+                Stream.COLOR: Sensor.RGB_CAMERA,
+            },
+        ),
+    ],
+)
+def test_find_origin_sensor(profiles, expected):
+    assert expected == find_origin_sensor(profiles)

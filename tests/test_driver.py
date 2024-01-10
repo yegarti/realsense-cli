@@ -56,7 +56,6 @@ def test_set_control_values(mock_context, driver):
 
     for opt in data:
         assert opt.name in result
-        print(opt)
         if opt.name == "exposure":
             assert result["exposure"] == pytest.approx(1000.0)
         else:

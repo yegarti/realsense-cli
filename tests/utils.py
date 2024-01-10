@@ -1,6 +1,6 @@
-from collections import Counter
+import time
+from contextlib import contextmanager
 from itertools import count
-from typing import NamedTuple
 
 import pyrealsense2 as rs
 
@@ -79,3 +79,12 @@ def build_software_device(
             rng.default = option.default_value
             soft_sensor.add_option(getattr(rs.option, option.name), rng)
     return soft_dev
+
+
+@contextmanager
+def timeit():
+    t0 = time.time()
+    try:
+        yield
+    finally:
+        print(time.time() - t0)
