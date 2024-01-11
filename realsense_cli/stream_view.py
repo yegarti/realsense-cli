@@ -10,8 +10,9 @@ from realsense_cli.types import Stream, FrameSet, Frame, Profile
 
 
 class StreamView(Panel):
-    def __init__(self, streams: Optional[list[Stream]] = None):
+    def __init__(self, streams: Optional[list[Stream]] = None, metadata: bool = True):
         logger.info("StreamView created")
+        self._metadata = metadata
         self._dynamic = not streams
         self._panels: dict[Stream, Panel] = {}
         self._title_set: dict[Stream, bool] = {}
@@ -38,10 +39,11 @@ class StreamView(Panel):
 
             metrics = {"index": frame.index, "fps": self._calc_fps(frame)}
             panel_str: list[str] = [f"Frame #{metrics['index']:<8} FPS: {metrics['fps']:<4.2f}"]
-            longest = max([len(m) for m in frame.metadata.keys()])
-            for md, val in frame.metadata.items():
-                name = md.replace("_", " ").title()
-                panel_str.append(f"{name.ljust(longest + 1)}={str(val).rjust(15)}")
+            if self._metadata:
+                longest = max([len(m) for m in frame.metadata.keys()])
+                for md, val in frame.metadata.items():
+                    name = md.replace("_", " ").title()
+                    panel_str.append(f"{name.ljust(longest + 1)}={str(val).rjust(15)}")
             self._panels[stream].renderable = "\n".join(panel_str)
             self._panels[stream].width = max(self._panels[stream].width, len(panel_str[-1]) + 4)
 

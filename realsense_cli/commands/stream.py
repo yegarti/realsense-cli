@@ -62,13 +62,14 @@ def stream_play(
             help="Stream method, high-level pipeline API or low-level sensor API",
         ),
     ] = True,
+    metadata: Annotated[bool, typer.Option("--md/--no-md", help="Show stream metadata")] = True,
 ):
     driver = get_driver()
     logger.debug(f"stream {profiles}")
     if not profiles:
         profiles = []
 
-    view = StreamView([profile.stream for profile in profiles])
+    view = StreamView([profile.stream for profile in profiles], metadata=metadata)
     try:
         driver.play(profiles, pipeline=api)
     except RuntimeError as e:
