@@ -17,6 +17,8 @@ from realsense_cli.types import (
     SafetyPreset,
     SafetyZone,
     SafetyMaskingZone,
+    SafetyInterfaceConfig,
+    SafetyPin,
 )
 
 import pyrealsense2 as rs  # type: ignore
@@ -413,7 +415,6 @@ class Realsense:
             rs_zone.zone_polygon = [rs.float2(*point) for point in zone.points]
             zones.append(rs_zone)
 
-
         masks = []
         for mask in preset.masking_zones:
             rs_mask = rs.masking_zone()
@@ -452,9 +453,14 @@ class Realsense:
         rx = raw_matrix.rotation.x
         ry = raw_matrix.rotation.y
         rz = raw_matrix.rotation.z
-        translation = [round2(p) for p in [raw_matrix.translation.x,
-                                           raw_matrix.translation.y,
-                                           raw_matrix.translation.z]]
+        translation = [
+            round2(p)
+            for p in [
+                raw_matrix.translation.x,
+                raw_matrix.translation.y,
+                raw_matrix.translation.z,
+            ]
+        ]
         rotation = [
             [rx.x, ry.x, rz.x],
             [rx.y, ry.y, rz.y],
@@ -467,21 +473,23 @@ class Realsense:
             points = []
             for polygon in zone.zone_polygon:
                 points.append((round2(polygon.x), round2(polygon.y)))
-            new_zones.append(SafetyZone(
-                points=points,
-                trigger_confidence=zone.safety_trigger_confidence,
-            ))
+            new_zones.append(
+                SafetyZone(
+                    points=points,
+                    trigger_confidence=zone.safety_trigger_confidence,
+                )
+            )
 
         nmasks = []
         for mask in masks:
             pixels = []
             for pixel in mask.region_of_interests:
                 pixels.append((pixel.i, pixel.j))
-            nmasks.append(SafetyMaskingZone(
-                attributes=mask.attributes,
-                pixels=pixels,
-                minimal_range=mask.minimal_range
-            ))
+            nmasks.append(
+                SafetyMaskingZone(
+                    attributes=mask.attributes, pixels=pixels, minimal_range=mask.minimal_range
+                )
+            )
 
         return SafetyPreset(
             new_zones,
@@ -493,7 +501,8 @@ class Realsense:
             round2(env.surface_height),
             round2(env.surface_inclination),
             round2(env.safety_trigger_duration),
-            str(preset))
+            str(preset),
+        )
 
     @contextmanager
     def service_mode(self, wait: float = 0):
@@ -505,3 +514,32 @@ class Realsense:
         finally:
             safety.set_option(rs.option.safety_mode, 0)
 
+    def get_safety_interface(self):
+        safety: rs.safety_sensor = self._get_sensor(Sensor.SAFETY_CAMERA).as_safety_sensor()
+        config: rs.safety_interface_config = safety.get_safety_interface_config()
+        pins_attr = filter(
+            lambda p: isinstance(getattr(config, p), rs.safety_interface_config_pin),
+            dir(config),
+        )
+        pins = {}
+        for pin in pins_attr:
+            rs_pin = getattr(config, pin)
+            pins[pin] = SafetyPin(
+                name=rs_pin.functionality.name, direction=rs_pin.direction.name
+            )
+
+        return SafetyInterfaceConfig(input_delay=config.gpio_stabilization_interval, pins=pins)
+
+    def set_safety_interface(self, interface: SafetyInterfaceConfig):
+        safety: rs.safety_sensor = self._get_sensor(Sensor.SAFETY_CAMERA).as_safety_sensor()
+
+        config = rs.safety_interface_config()
+        config.gpio_stabilization_interval = interface.input_delay
+        config.safety_zone_selection_overlap_time_period = 0
+
+        for name, pin in interface.pins.items():
+            spin: rs.safety_interface_config_pin = getattr(interface, name)
+            spin.direction = getattr(rs.safety_pin_direction, pin.direction)
+            spin.functionality = getattr(rs.safety_pin_functionality, pin.name)
+
+        print(config)

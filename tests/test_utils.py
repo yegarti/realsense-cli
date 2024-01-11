@@ -1,6 +1,16 @@
 import pytest
 
-from realsense_cli.types import Profile, Stream, Resolution, Sensor
+from realsense_cli.types import (
+    Profile,
+    SafetyInterfaceConfig,
+    SafetyMaskingZone,
+    SafetyPin,
+    SafetyPreset,
+    SafetyZone,
+    Stream,
+    Resolution,
+    Sensor,
+)
 from realsense_cli.utils import group_profiles, find_origin_sensor
 
 
@@ -62,3 +72,75 @@ def test_profile_from_string_error():
 )
 def test_find_origin_sensor(profiles, expected):
     assert expected == find_origin_sensor(profiles)
+
+
+def test_preset_convert():
+    preset = SafetyPreset(
+        safety_zones=[
+            SafetyZone(
+                points=[(0.0, 0.2), (2.5, 0.2), (2.4, -0.1), (0.0, -0.1)], trigger_confidence=0
+            ),
+            SafetyZone(
+                points=[(0.0, 0.2), (2.4, 0.2), (2.4, -0.1), (0.0, -0.1)], trigger_confidence=0
+            ),
+        ],
+        masking_zones=[
+            SafetyMaskingZone(
+                attributes=0, pixels=[(0, 0), (0, 0), (0, 0), (0, 0)], minimal_range=0.0
+            ),
+            SafetyMaskingZone(
+                attributes=0, pixels=[(0, 0), (0, 0), (0, 0), (0, 0)], minimal_range=0.0
+            ),
+            SafetyMaskingZone(
+                attributes=0, pixels=[(0, 0), (0, 0), (0, 0), (0, 0)], minimal_range=0.0
+            ),
+            SafetyMaskingZone(
+                attributes=0, pixels=[(0, 0), (0, 0), (0, 0), (0, 0)], minimal_range=0.0
+            ),
+            SafetyMaskingZone(
+                attributes=0, pixels=[(0, 0), (0, 0), (0, 0), (0, 0)], minimal_range=0.0
+            ),
+            SafetyMaskingZone(
+                attributes=0, pixels=[(0, 0), (0, 0), (0, 0), (0, 0)], minimal_range=0.0
+            ),
+            SafetyMaskingZone(
+                attributes=0, pixels=[(0, 0), (0, 0), (0, 0), (0, 0)], minimal_range=0.0
+            ),
+            SafetyMaskingZone(
+                attributes=0, pixels=[(0, 0), (0, 0), (0, 0), (0, 0)], minimal_range=0.0
+            ),
+        ],
+        rotation=[[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]],
+        translation=[0.0, 0.0, 0.18],
+        robot_height=0.2,
+        grid_cell_size=0.02,
+        surface_height=0.1,
+        surface_inclination=15.0,
+    )
+    assert preset == SafetyPreset.from_json(preset.to_json())
+
+
+def test_interface_convert():
+    interface = SafetyInterfaceConfig(
+        input_delay=150,
+        pins={
+            'gpio_0': SafetyPin(name='preset_select5_a', direction='input'),
+            'gpio_1': SafetyPin(name='preset_select5_b', direction='input'),
+            'gpio_2': SafetyPin(name='device_ready', direction='output'),
+            'gpio_3': SafetyPin(name='maintenance', direction='output'),
+            'gpio_4': SafetyPin(name='restart_interlock', direction='input'),
+            'ground': SafetyPin(name='gnd', direction='input'),
+            'ossd1_a': SafetyPin(name='ossd1_a', direction='output'),
+            'ossd1_b': SafetyPin(name='ossd1_b', direction='output'),
+            'power': SafetyPin(name='p24vdc', direction='input'),
+            'preset1_a': SafetyPin(name='preset_select1_a', direction='input'),
+            'preset1_b': SafetyPin(name='preset_select1_b', direction='input'),
+            'preset2_a': SafetyPin(name='preset_select2_a', direction='input'),
+            'preset2_b': SafetyPin(name='preset_select2_b', direction='input'),
+            'preset3_a': SafetyPin(name='preset_select3_a', direction='input'),
+            'preset3_b': SafetyPin(name='preset_select3_b', direction='input'),
+            'preset4_a': SafetyPin(name='preset_select4_a', direction='input'),
+            'preset4_b': SafetyPin(name='preset_select4_b', direction='input')
+        }
+    )
+    assert interface == SafetyInterfaceConfig.from_json(interface.to_json())

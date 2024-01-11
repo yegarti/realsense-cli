@@ -31,6 +31,7 @@ app.add_typer(stream_app, name="stream")
 
 app.add_typer(safety_app, name="safety")
 
+
 @app.command(name="reset")
 def rs_reset() -> None:
     """

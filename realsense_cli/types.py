@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Any, NamedTuple, Optional
+from typing import Any, NamedTuple, Optional, Literal
 
 from loguru import logger
 
@@ -227,3 +227,25 @@ class SafetyPreset:
         data["masking_zones"] = [s._asdict() for s in data["masking_zones"]]
         return json.dumps(data)
 
+
+class SafetyPin(NamedTuple):
+    name: str
+    direction: Literal["input", "output"]
+
+
+@dataclass
+class SafetyInterfaceConfig:
+    input_delay: float
+    pins: dict[str, SafetyPin]
+
+    @classmethod
+    def from_json(cls, data: str):
+        jdata = json.loads(data)
+        config = cls(**jdata)
+        config.pins = {n: SafetyPin(**pin) for n, pin in jdata["pins"].items()}
+        return config
+
+    def to_json(self) -> str:
+        data = asdict(self)
+        data["pins"] = {n: p._asdict() for n, p in data["pins"].items()}
+        return json.dumps(data)
