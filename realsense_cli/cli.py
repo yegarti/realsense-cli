@@ -76,3 +76,7 @@ def callback(
             print(
                 f"Multiple devices are connected but no serial provided, using device: '{driver.active_device}'"
             )
+
+
+if getattr(sys, 'frozen', False):
+    app()
