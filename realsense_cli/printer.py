@@ -1,10 +1,12 @@
+from pathlib import Path
 from typing import Optional, Any
 
 from rich import box
 from rich.console import Console
 from rich.table import Table
 
-from realsense_cli.types import DeviceInfo, Option, Sensor, Profile, Stream
+from realsense_cli.rs_bag_parser import TopicInfo
+from realsense_cli.types import DeviceInfo, Option, Sensor, Profile
 from realsense_cli.utils import group_profiles
 
 
@@ -80,3 +82,19 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
         )
 
     Console().print(table)
+
+
+def list_bag_data(path: Path, duration: float, topics: list[TopicInfo]):
+    info_table = Table(box=box.SIMPLE_HEAD)
+    info_table.add_column()
+    info_table.add_column()
+    info_table.add_row("Bag", str(path))
+    info_table.add_row("Duration", f"{duration} seconds")
+    table = Table(title="Data", box=box.SIMPLE)
+    table.add_column("Topic")
+    table.add_column("Messages")
+    table.add_column("Message Type")
+    for info in topics:
+        table.add_row(info.name, str(info.total_messages), info.msg_type)
+    Console().print(table)
+    Console().print(info_table)

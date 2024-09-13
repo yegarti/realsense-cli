@@ -4,6 +4,7 @@ from typing import Annotated
 from loguru import logger
 import typer
 
+from realsense_cli.commands.bag import bag_app
 from realsense_cli.commands.config import config_app
 from realsense_cli.commands.stream import stream_app
 from realsense_cli.driver import get_driver
@@ -27,6 +28,8 @@ def rs_list() -> None:
 app.add_typer(config_app, name="config")
 
 app.add_typer(stream_app, name="stream")
+
+app.add_typer(bag_app, name="bag")
 
 
 @app.command(name="reset")
@@ -64,7 +67,7 @@ def callback(
         print(f"Serial {serial} does not match any connected device:")
         raise typer.Abort()
 
-    if ctx.invoked_subcommand != "list" and {"-h", "--help"}.isdisjoint(sys.argv):
+    if ctx.invoked_subcommand not in ("list", "bag") and {"-h", "--help"}.isdisjoint(sys.argv):
         logger.debug("checking device exist for subcommand '{}'", ctx.invoked_subcommand)
         dev_n = len(driver.query_devices())
         if dev_n == 0:
@@ -78,5 +81,5 @@ def callback(
             )
 
 
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     app()
