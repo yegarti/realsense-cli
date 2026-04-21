@@ -36,4 +36,5 @@ build-backend = "hatchling.build"
 line-length=96
 
 [tool.pytest.ini_options]
-addopts = "-s -ra"
+addopts = "-s -ra -m 'not hardware'"
+markers = ["hardware: requires a physical RealSense device to be connected"]

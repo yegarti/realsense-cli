@@ -3,6 +3,8 @@ from realsense_cli.driver.realsense import Realsense
 from realsense_cli.types import Sensor
 from tests.utils import MOCK_DEVICE, MOCK_SENSORS
 
+pytestmark = pytest.mark.hardware
+
 
 @pytest.fixture
 def driver():
