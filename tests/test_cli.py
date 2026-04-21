@@ -1,5 +1,3 @@
-import os
-
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
@@ -9,11 +7,6 @@ import pytest
 from realsense_cli.types import CliSensor
 
 runner = CliRunner()
-
-
-@pytest.fixture(autouse=True)
-def set_mock_envar():
-    os.environ["RSCLI_DRIVER"] = "mock"
 
 
 def test_list(driver):
@@ -85,6 +78,19 @@ def test_config_set(driver, sensor, controls, vals):
         assert opts[control].name in stdout
         # default_value used in mock driver as current value
         assert str(opts[control].default_value) in stdout
+
+
+def test_stream_play(driver):
+    from realsense_cli.types import Profile, Stream, Resolution
+
+    profiles = [Profile(Stream.DEPTH, Resolution(640, 480), 30, "z16")]
+    driver.play(profiles)
+    frameset = driver.wait_for_frameset()
+    assert frameset is not None
+    assert Stream.DEPTH in frameset
+    assert frameset[Stream.DEPTH].index == 0
+    second = driver.wait_for_frameset()
+    assert second[Stream.DEPTH].index == 1
 
 
 @pytest.mark.parametrize("sensor", (CliSensor.DEPTH, CliSensor.COLOR))
