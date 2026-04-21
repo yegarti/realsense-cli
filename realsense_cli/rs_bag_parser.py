@@ -58,6 +58,12 @@ class RosParser:
         for conn in self._reader.connections:
             self.topics[conn.topic] = TopicInfo(conn.topic, conn.msgtype, conn.msgcount)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self._reader.close()
+
             # if conn.msgtype == 'sensor_msgs/msg/Image':
             #     # extra unknown 4 bytes at the end
             #     rd = rd[:-4]

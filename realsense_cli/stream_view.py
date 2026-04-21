@@ -39,8 +39,8 @@ class StreamView(Panel):
 
             metrics = {"index": frame.index, "fps": self._calc_fps(frame)}
             panel_str: list[str] = [f"Frame #{metrics['index']:<8} FPS: {metrics['fps']:<4.2f}"]
-            if self._metadata:
-                longest = max([len(m) for m in frame.metadata.keys()])
+            if self._metadata and frame.metadata:
+                longest = max(len(m) for m in frame.metadata.keys())
                 for md, val in frame.metadata.items():
                     name = md.replace("_", " ").title()
                     panel_str.append(f"{name.ljust(longest + 1)}={str(val).rjust(15)}")
