@@ -16,9 +16,9 @@ def bag_info(
         typer.Argument(exists=True, file_okay=True),
     ],
 ):
-    parser = RosParser(bag.absolute())
-    list_bag_data(
-        parser.path,
-        parser.duration,
-        sorted(list(parser.topics.values()), key=lambda t: (t.total_messages, t.name)),
-    )
+    with RosParser(bag.absolute()) as parser:
+        list_bag_data(
+            parser.path,
+            parser.duration,
+            sorted(list(parser.topics.values()), key=lambda t: (t.total_messages, t.name)),
+        )

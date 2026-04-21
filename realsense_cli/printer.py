@@ -9,6 +9,8 @@ from realsense_cli.rs_bag_parser import TopicInfo
 from realsense_cli.types import DeviceInfo, Option, Sensor, Profile
 from realsense_cli.utils import group_profiles
 
+_console = Console(width=120)
+
 
 def list_devices(devices: list[DeviceInfo]) -> None:
     table = Table(title="Devices", box=box.SIMPLE, min_width=80)
@@ -22,7 +24,7 @@ def list_devices(devices: list[DeviceInfo]) -> None:
         sensors = "\n".join(dev.sensors)
         table.add_row(dev.name, dev.serial, dev.fw, dev.connection, sensors)
 
-    Console().print(table)
+    _console.print(table)
 
 
 def list_options(
@@ -51,7 +53,7 @@ def list_options(
             opt.description,
         )
 
-    Console().print(table)
+    _console.print(table)
 
 
 def list_options_values(options_values: dict[str, Any]):
@@ -62,7 +64,7 @@ def list_options_values(options_values: dict[str, Any]):
     for opt, value in options_values.items():
         table.add_row(opt, str(value))
 
-    Console().print(table)
+    _console.print(table)
 
 
 def list_profiles(profiles: list[Profile], title: str = "Streams"):
@@ -81,7 +83,7 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
             profile.format,
         )
 
-    Console().print(table)
+    _console.print(table)
 
 
 def list_bag_data(path: Path, duration: float, topics: list[TopicInfo]):
@@ -96,5 +98,5 @@ def list_bag_data(path: Path, duration: float, topics: list[TopicInfo]):
     table.add_column("Message Type")
     for info in topics:
         table.add_row(info.name, str(info.total_messages), info.msg_type)
-    Console().print(table)
+    _console.print(table)
     Console().print(info_table)

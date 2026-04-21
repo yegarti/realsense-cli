@@ -312,7 +312,12 @@ class Realsense:
         return None when no frameset arrive after timeout
         """
         result: FrameSet = {}
-        rs_frame: rs.frame = self._frame_queue.wait_for_frame(int(timeout * 1000))
+        try:
+            rs_frame: rs.frame = self._frame_queue.wait_for_frame(int(timeout * 1000))
+        except RuntimeError as e:
+            if "Frame didn't arrive within" in str(e):
+                return None
+            raise
         frames: list[rs.frame]
         if rs_frame.is_frameset():
             frames = [f for f in rs_frame.as_frameset()]

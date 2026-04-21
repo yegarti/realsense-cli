@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from loguru import logger
 
-import pyrealsense2 as rs  # type: ignore
+if TYPE_CHECKING:
+    import pyrealsense2 as rs  # type: ignore
 
 
 @dataclass
@@ -140,8 +141,10 @@ class Profile:
             raise ValueError(f"Failed to parse profile: '{profile}'")
 
     @classmethod
-    def from_rs(cls, profile: rs.stream_profile) -> "Profile":
+    def from_rs(cls, profile: "rs.stream_profile") -> "Profile":
         """Convert pyrealsense2 profile to Profile"""
+        import pyrealsense2 as rs  # type: ignore  # local — only used by real HW driver
+
         width, height = 0, 0
         if profile.is_video_stream_profile():
             vsp: rs.video_stream_profile = profile.as_video_stream_profile()

@@ -82,11 +82,11 @@ def stream_play(
     try:
         with Live(view, refresh_per_second=30) as live:
             while True:
-                try:
-                    frameset = driver.wait_for_frameset()
-                    view.update(frameset)
-                except RuntimeError:
+                frameset = driver.wait_for_frameset()
+                if frameset is None:
                     logger.warning("Frames didn't arrive until timeout")
+                    continue
+                view.update(frameset)
     finally:
         print("Stopping all streams")
         driver.stop()

@@ -36,6 +36,9 @@ def config_get(
     ] = False,
 ):
     driver = get_driver()
+    if not controls and not all_controls:
+        typer.echo("Specify control names or use --all to query all controls.", err=True)
+        raise typer.Exit(1)
     if not controls:
         controls = []
     if all_controls:
