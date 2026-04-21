@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from rosbags.rosbag1 import Reader
-from rosbags.typesys import get_types_from_idl, register_types
+from rosbags.typesys import Stores, get_typestore, get_types_from_idl
 
 _rs_msgs_idl = """
 module realsense_msgs {
@@ -51,7 +51,8 @@ class RosParser:
     _reader: Reader = field(init=False)
 
     def __post_init__(self):
-        register_types(get_types_from_idl(_rs_msgs_idl))
+        typestore = get_typestore(Stores.ROS1_NOETIC)
+        typestore.register(get_types_from_idl(_rs_msgs_idl))
         self._reader = Reader(self.path)
         self._reader.open()
         self.duration = self._reader.duration / 1e9
