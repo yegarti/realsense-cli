@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from loguru import logger
@@ -17,10 +16,8 @@ class DeviceInfo:
     sensors: list[str]
 
 
-class Sensor(Enum):
-    STEREO_MODULE = "Stereo Module"
-    RGB_CAMERA = "RGB Camera"
-    MOTION_SENSOR = "Motion Module"
+Sensor = str  # sensor name as reported by pyrealsense2, e.g. "Stereo Module"
+Stream = str  # stream name as reported by pyrealsense2, e.g. "Depth"
 
 
 @dataclass(frozen=True)
@@ -34,58 +31,28 @@ class Option:
     vtype: type
 
 
-class Stream(Enum):
-    DEPTH = "Depth"
-    INFRARED = "Infrared 1"
-    INFRARED2 = "Infrared 2"
-    COLOR = "Color"
-    GYRO = "Gyro"
-    ACCEL = "Accel"
+_SENSOR_ALIASES: dict[str, str] = {
+    "depth": "Stereo Module",
+    "color": "RGB Camera",
+    "motion": "Motion Module",
+}
+
+_STREAM_ALIASES: dict[str, str] = {
+    "depth": "Depth",
+    "infrared": "Infrared 1",
+    "infrared2": "Infrared 2",
+    "color": "Color",
+    "gyro": "Gyro",
+    "accel": "Accel",
+}
 
 
-class CliStream(Enum):
-    DEPTH = "depth"
-    INFRARED = "infrared"
-    INFRARED2 = "infrared2"
-    COLOR = "color"
-    GYRO = "gyro"
-    ACCEL = "accel"
-
-    @property
-    def rs_enum(self) -> Stream:
-        match self:
-            case self.DEPTH:
-                return Stream.DEPTH
-            case self.GYRO:
-                return Stream.GYRO
-            case self.ACCEL:
-                return Stream.ACCEL
-            case self.COLOR:
-                return Stream.COLOR
-            case self.INFRARED:
-                return Stream.INFRARED
-            case self.INFRARED2:
-                return Stream.INFRARED2
-            case _:
-                raise RuntimeError(f"Unmatched stream: {self}")
+def resolve_sensor_name(name: str) -> str:
+    return _SENSOR_ALIASES.get(name.lower(), name)
 
 
-class CliSensor(Enum):
-    DEPTH = "depth"
-    COLOR = "color"
-    MOTION = "motion"
-
-    @property
-    def rs_enum(self) -> Sensor:
-        match self:
-            case self.DEPTH:
-                return Sensor.STEREO_MODULE
-            case self.COLOR:
-                return Sensor.RGB_CAMERA
-            case self.MOTION:
-                return Sensor.MOTION_SENSOR
-            case _:
-                raise RuntimeError(f"Unmatched sensor: {self}")
+def resolve_stream_name(name: str) -> str:
+    return _STREAM_ALIASES.get(name.lower(), name)
 
 
 class Resolution(NamedTuple):
@@ -114,9 +81,9 @@ class Profile:
 
     def __post_init__(self):
         match self.stream:
-            case Stream.INFRARED:
+            case "Infrared 1":
                 index = 1
-            case Stream.INFRARED2:
+            case "Infrared 2":
                 index = 2
             case _:
                 index = -1
@@ -131,7 +98,7 @@ class Profile:
         logger.debug(f"parsing profile from string: {profile}")
         try:
             parts = profile.split("-")
-            stream = CliStream(parts[0]).rs_enum
+            stream = resolve_stream_name(parts[0])
             res = Resolution.from_string(parts[1] if len(parts) > 1 else "0x0")
             fps = int(parts[2] if len(parts) > 2 else 0)
             fmt = parts[3] if len(parts) > 3 else "any"
@@ -151,7 +118,7 @@ class Profile:
             width, height = vsp.width(), vsp.height()
 
         return cls(
-            stream=Stream(profile.stream_name()),
+            stream=profile.stream_name(),
             resolution=Resolution(width, height),
             fps=profile.fps(),
             format=profile.format().name,

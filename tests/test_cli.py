@@ -1,10 +1,9 @@
+import pytest
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
-
-import pytest
-
-from realsense_cli.types import CliSensor
+from realsense_cli.driver.mock import MockDriver
+from realsense_cli.types import DeviceInfo, Option, Profile, Resolution, resolve_sensor_name
 
 runner = CliRunner()
 
@@ -18,10 +17,14 @@ def test_list(driver):
     assert result.exit_code == 0
 
 
-@pytest.mark.parametrize("sensor", (CliSensor.DEPTH, CliSensor.COLOR), ids=["depth", "color"])
-def test_config_list(driver, sensor):
-    result = runner.invoke(app, ["config", "list", sensor.value])
-    controls = driver.list_controls(sensor.rs_enum)
+@pytest.mark.parametrize(
+    "sensor_alias, sensor_name",
+    [("depth", "Stereo Module"), ("color", "RGB Camera")],
+    ids=["depth", "color"],
+)
+def test_config_list(driver, sensor_alias, sensor_name):
+    result = runner.invoke(app, ["config", "list", sensor_alias])
+    controls = driver.list_controls(sensor_name)
     assert result.exit_code == 0
     stdout = result.stdout
     for option in controls:
@@ -33,17 +36,17 @@ def test_config_list(driver, sensor):
 
 
 @pytest.mark.parametrize(
-    "sensor, controls",
+    "sensor_alias, sensor_name, controls",
     [
-        (CliSensor.DEPTH, ["exposure"]),
-        (CliSensor.COLOR, ["brightness"]),
-        (CliSensor.DEPTH, ["exposure", "enable_auto_exposure"]),
+        ("depth", "Stereo Module", ["exposure"]),
+        ("color", "RGB Camera", ["brightness"]),
+        ("depth", "Stereo Module", ["exposure", "enable_auto_exposure"]),
     ],
 )
-def test_config_get(driver, sensor, controls):
-    result = runner.invoke(app, ["config", "get", sensor.value, *controls])
+def test_config_get(driver, sensor_alias, sensor_name, controls):
+    result = runner.invoke(app, ["config", "get", sensor_alias, *controls])
     opts = {}
-    for option in driver.list_controls(sensor.rs_enum):
+    for option in driver.list_controls(sensor_name):
         for ctrl in controls:
             if ctrl == option.name:
                 opts[ctrl] = option
@@ -56,18 +59,18 @@ def test_config_get(driver, sensor, controls):
 
 
 @pytest.mark.parametrize(
-    "sensor, controls, vals",
+    "sensor_alias, sensor_name, controls, vals",
     [
-        (CliSensor.DEPTH, ["exposure"], ["22"]),
-        (CliSensor.COLOR, ["brightness"], ["34"]),
-        (CliSensor.DEPTH, ["exposure", "enable_auto_exposure"], ["53", "1"]),
+        ("depth", "Stereo Module", ["exposure"], ["22"]),
+        ("color", "RGB Camera", ["brightness"], ["34"]),
+        ("depth", "Stereo Module", ["exposure", "enable_auto_exposure"], ["53", "1"]),
     ],
 )
-def test_config_set(driver, sensor, controls, vals):
+def test_config_set(driver, sensor_alias, sensor_name, controls, vals):
     setstrs = [f"{c}={v}" for c, v in zip(controls, vals)]
-    result = runner.invoke(app, ["config", "set", sensor.value, *setstrs])
+    result = runner.invoke(app, ["config", "set", sensor_alias, *setstrs])
     opts = {}
-    for option in driver.list_controls(sensor.rs_enum):
+    for option in driver.list_controls(sensor_name):
         for ctrl in controls:
             if ctrl == option.name:
                 opts[ctrl] = option
@@ -76,36 +79,114 @@ def test_config_set(driver, sensor, controls, vals):
     stdout = result.stdout
     for control in controls:
         assert opts[control].name in stdout
-        # default_value used in mock driver as current value
         assert str(opts[control].default_value) in stdout
 
 
 def test_stream_play(driver):
-    from realsense_cli.types import Profile, Stream, Resolution
-
-    profiles = [Profile(Stream.DEPTH, Resolution(640, 480), 30, "z16")]
+    profiles = [Profile("Depth", Resolution(640, 480), 30, "z16")]
     driver.play(profiles)
     frameset = driver.wait_for_frameset()
     assert frameset is not None
-    assert Stream.DEPTH in frameset
-    assert frameset[Stream.DEPTH].index == 0
+    assert "Depth" in frameset
+    assert frameset["Depth"].index == 0
     second = driver.wait_for_frameset()
-    assert second[Stream.DEPTH].index == 1
+    assert second["Depth"].index == 1
 
 
-@pytest.mark.parametrize("sensor", (CliSensor.DEPTH, CliSensor.COLOR))
-def test_stream_list(driver, sensor):
-    result = runner.invoke(app, ["stream", "list", sensor.value])
-    profiles = driver.list_streams(sensor.rs_enum)
+@pytest.mark.parametrize(
+    "sensor_alias, sensor_name",
+    [("depth", "Stereo Module"), ("color", "RGB Camera")],
+)
+def test_stream_list(driver, sensor_alias, sensor_name):
+    result = runner.invoke(app, ["stream", "list", sensor_alias])
+    profiles = driver.list_streams(sensor_name)
     assert result.exit_code == 0
     stdout = result.stdout
     for profile in profiles:
         matches = 0
         for line in stdout.split("\n"):
             if (
-                profile.stream.value in line
+                profile.stream in line
                 and profile.format in line
                 and str(profile.resolution) in line
             ):
                 matches += 1
         assert matches == 1
+
+
+# --- Robustness tests: new/unknown sensors and streams ---
+
+@pytest.fixture
+def future_driver():
+    config = {
+        "devices": [
+            DeviceInfo(
+                name="Intel RealSense D999",
+                serial="9999999999",
+                fw="9.0.0.0",
+                connection="3.2",
+                sensors=["Future Sensor"],
+            )
+        ],
+        "sensors": {
+            "Future Sensor": {
+                "options": [Option("gain", "Gain", 0, 100, 1, 50, int)],
+                "profiles": [Profile("Future Stream", Resolution(1280, 720), 60, "rgb8")],
+            }
+        },
+    }
+    return MockDriver(config)
+
+
+def test_list_devices_unknown_sensor(future_driver):
+    devices = future_driver.query_devices()
+    assert devices[0].sensors == ["Future Sensor"]
+    assert devices[0].name == "Intel RealSense D999"
+
+
+def test_list_streams_unknown_sensor(future_driver):
+    profiles = future_driver.list_streams("Future Sensor")
+    assert len(profiles) == 1
+    assert profiles[0].stream == "Future Stream"
+
+
+def test_list_controls_unknown_sensor(future_driver):
+    controls = future_driver.list_controls("Future Sensor")
+    assert len(controls) == 1
+    assert controls[0].name == "gain"
+
+
+def test_rs_list_future_device(future_driver, monkeypatch):
+    monkeypatch.setattr("realsense_cli.driver._driver", future_driver)
+    result = runner.invoke(app, ["list"])
+    assert result.exit_code == 0
+    assert "D999" in result.output
+    assert "Future Sensor" in result.output
+
+
+def test_stream_list_future_sensor(future_driver, monkeypatch):
+    monkeypatch.setattr("realsense_cli.driver._driver", future_driver)
+    result = runner.invoke(app, ["stream", "list", "Future Sensor"])
+    assert result.exit_code == 0
+    assert "Future Stream" in result.output
+
+
+def test_config_list_future_sensor(future_driver, monkeypatch):
+    monkeypatch.setattr("realsense_cli.driver._driver", future_driver)
+    result = runner.invoke(app, ["config", "list", "Future Sensor"])
+    assert result.exit_code == 0
+    assert "gain" in result.output
+
+
+def test_config_list_full_sensor_name(driver, monkeypatch):
+    """Full sensor name (e.g. 'Stereo Module') accepted in addition to alias 'depth'."""
+    result = runner.invoke(app, ["config", "list", "Stereo Module"])
+    assert result.exit_code == 0
+    assert "exposure" in result.output
+
+
+def test_stream_list_full_sensor_name(driver, monkeypatch):
+    """Full sensor name (e.g. 'RGB Camera') accepted in addition to alias 'color'."""
+    result = runner.invoke(app, ["stream", "list", "RGB Camera"])
+    assert result.exit_code == 0
+    assert "Color" in result.output

@@ -1,22 +1,23 @@
-from realsense_cli.types import Profile, Stream, Sensor
+from realsense_cli.types import Profile
+
+_stream_order: dict[str, int] = {
+    "Depth": 0,
+    "Infrared 1": 1,
+    "Infrared 2": 2,
+    "Color": 3,
+    "Gyro": 4,
+    "Accel": 5,
+}
 
 
 def group_profiles(profiles: list[Profile]) -> dict[Profile, list[int]]:
     """
     Group profiles that differ only by FPS
     """
-    stream_order: dict[Stream, int] = {
-        Stream.DEPTH: 0,
-        Stream.INFRARED: 1,
-        Stream.INFRARED2: 2,
-        Stream.COLOR: 3,
-        Stream.GYRO: 4,
-        Stream.ACCEL: 5,
-    }
 
     def sort_key(pro: Profile):
         return (
-            stream_order[pro.stream],
+            _stream_order.get(pro.stream, 99),
             pro.resolution.width * pro.resolution.height,
             pro.format,
             pro.fps,
@@ -40,7 +41,7 @@ def group_profiles(profiles: list[Profile]) -> dict[Profile, list[int]]:
     return buckets
 
 
-def find_origin_sensor(sensor_profiles: dict[Sensor, list[Profile]]) -> dict[Stream, Sensor]:
+def find_origin_sensor(sensor_profiles: dict[str, list[Profile]]) -> dict[str, str]:
     res = {}
     for sensor, profiles in sensor_profiles.items():
         for profile in profiles:

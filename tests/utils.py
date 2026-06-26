@@ -4,7 +4,7 @@ from itertools import count
 
 import pyrealsense2 as rs
 
-from realsense_cli.types import DeviceInfo, Sensor, Profile, Stream, Resolution, Option
+from realsense_cli.types import DeviceInfo, Profile, Resolution, Option
 
 
 MOCK_DEVICE: DeviceInfo = DeviceInfo(
@@ -20,13 +20,13 @@ MOCK_DEVICE: DeviceInfo = DeviceInfo(
 
 MOCK_SENSORS: dict = {
     "profiles": {
-        Sensor.STEREO_MODULE: [
-            Profile(Stream.DEPTH, Resolution(640, 480), 15, "Z16", 0),
-            Profile(Stream.DEPTH, Resolution(640, 480), 30, "Z16", 0),
+        "Stereo Module": [
+            Profile("Depth", Resolution(640, 480), 15, "Z16", 0),
+            Profile("Depth", Resolution(640, 480), 30, "Z16", 0),
         ]
     },
     "options": {
-        Sensor.STEREO_MODULE: [
+        "Stereo Module": [
             Option("exposure", "", 0.0, 10000.0, 1.0, 8500, int),
             Option("depth_units", "", 0.0, 10000.0, 1.0, 8500, int),
             Option("laser_power", "", 0.0, 360.0, 1.0, 120.0, int),
@@ -38,8 +38,8 @@ MOCK_SENSORS: dict = {
 
 def build_software_device(
     device: DeviceInfo,
-    profiles: dict[Sensor, list[Profile]],
-    options: dict[Sensor, list[Option]],
+    profiles: dict[str, list[Profile]],
+    options: dict[str, list[Option]],
 ):
     soft_dev = rs.software_device()
     # using `update_info` because already registered, register again would append
@@ -48,17 +48,17 @@ def build_software_device(
     soft_dev.register_info(rs.camera_info.usb_type_descriptor, device.connection)
     soft_dev.register_info(rs.camera_info.firmware_version, device.fw)
 
-    _sensors: dict[Sensor, rs.sensor] = {}
+    _sensors: dict[str, rs.sensor] = {}
     stream_idx = count()
     for sensor in device.sensors:
         soft_sensor: rs.software_sensor = soft_dev.add_sensor(sensor)
-        _sensors[Sensor(sensor)] = soft_sensor
+        _sensors[sensor] = soft_sensor
 
-    for sensor, profiles in profiles.items():
+    for sensor, sensor_profiles in profiles.items():
         soft_sensor = _sensors[sensor]
-        for profile in profiles:
+        for profile in sensor_profiles:
             stream = rs.video_stream()
-            if profile.stream == Stream.DEPTH:
+            if profile.stream == "Depth":
                 stream.type = rs.stream.depth
                 stream.bpp = 2
             stream.width = profile.resolution.width
@@ -69,9 +69,9 @@ def build_software_device(
             stream.uid = next(stream_idx)
             soft_sensor.add_video_stream(stream)
 
-    for sensor, options in options.items():
+    for sensor, sensor_options in options.items():
         soft_sensor = _sensors[sensor]
-        for option in options:
+        for option in sensor_options:
             rng = rs.option_range()
             rng.min = option.min_value
             rng.max = option.max_value

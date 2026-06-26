@@ -1,6 +1,5 @@
 import pytest
 from realsense_cli.driver.realsense import Realsense
-from realsense_cli.types import Sensor
 from tests.utils import MOCK_DEVICE, MOCK_SENSORS
 
 pytestmark = pytest.mark.hardware
@@ -22,10 +21,9 @@ def test_query_devices_no_device(driver):
     assert len(devices) == 0
 
 
-# @pytest.mark.parametrize('sensor')
 def test_list_controls(mock_context, driver):
-    result = {opt.name: opt for opt in driver.list_controls(Sensor.STEREO_MODULE)}
-    expected = MOCK_SENSORS["options"][Sensor.STEREO_MODULE]
+    result = {opt.name: opt for opt in driver.list_controls("Stereo Module")}
+    expected = MOCK_SENSORS["options"]["Stereo Module"]
     for option in expected:
         assert option.name in result
         opt_res = result[option.name]
@@ -36,9 +34,9 @@ def test_list_controls(mock_context, driver):
 
 
 def test_get_control_values(mock_context, driver):
-    data = MOCK_SENSORS["options"][Sensor.STEREO_MODULE]
+    data = MOCK_SENSORS["options"]["Stereo Module"]
     opts = [option.name for option in data]
-    result = driver.get_control_values(Sensor.STEREO_MODULE, opts)
+    result = driver.get_control_values("Stereo Module", opts)
 
     for opt in data:
         assert opt.name in result
@@ -46,15 +44,15 @@ def test_get_control_values(mock_context, driver):
 
 
 def test_set_control_values(mock_context, driver):
-    data = MOCK_SENSORS["options"][Sensor.STEREO_MODULE]
+    data = MOCK_SENSORS["options"]["Stereo Module"]
     driver.set_control_values(
-        Sensor.STEREO_MODULE,
+        "Stereo Module",
         {
             "exposure": 1000,
         },
     )
     opts = [option.name for option in data]
-    result = driver.get_control_values(Sensor.STEREO_MODULE, opts)
+    result = driver.get_control_values("Stereo Module", opts)
 
     for opt in data:
         assert opt.name in result
@@ -65,8 +63,8 @@ def test_set_control_values(mock_context, driver):
 
 
 def test_list_streams(mock_context, driver):
-    data = MOCK_SENSORS["profiles"][Sensor.STEREO_MODULE]
-    result = driver.list_streams(Sensor.STEREO_MODULE)
+    data = MOCK_SENSORS["profiles"]["Stereo Module"]
+    result = driver.list_streams("Stereo Module")
     assert len(data) == len(result)
     for profile in data:
         assert profile in result

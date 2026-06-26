@@ -6,10 +6,8 @@ from loguru import logger
 
 from realsense_cli.types import (
     DeviceInfo,
-    Sensor,
     Option,
     Profile,
-    Stream,
     Resolution,
     FrameSet,
     Frame,
@@ -29,14 +27,14 @@ class Realsense:
         logger.info("Instancing Realsense driver")
         self._ctx: rs.context = rs.context()
         self._devices: list[rs.device] = []
-        self._sensors: dict[rs.device, dict[Sensor, rs.sensor]] = {}
-        self._streams_map: dict[Stream, rs.stream] = {
-            Stream.DEPTH: rs.stream.depth,
-            Stream.INFRARED: rs.stream.infrared,
-            Stream.INFRARED2: rs.stream.infrared,
-            Stream.COLOR: rs.stream.color,
-            Stream.GYRO: rs.stream.gyro,
-            Stream.ACCEL: rs.stream.accel,
+        self._sensors: dict[rs.device, dict[str, rs.sensor]] = {}
+        self._streams_map: dict[str, rs.stream] = {
+            "Depth": rs.stream.depth,
+            "Infrared 1": rs.stream.infrared,
+            "Infrared 2": rs.stream.infrared,
+            "Color": rs.stream.color,
+            "Gyro": rs.stream.gyro,
+            "Accel": rs.stream.accel,
         }
         self._metadata: list[rs.frame_metadata_value] = []
         self._stream_method: str = "pipe"
@@ -69,7 +67,7 @@ class Realsense:
             rs_sensor: rs.sensor
             for rs_sensor in dev.sensors:
                 logger.debug("Adding sensor {} for device {}", rs_sensor, dev)
-                self._sensors[dev][Sensor(rs_sensor.name)] = rs_sensor
+                self._sensors[dev][rs_sensor.name] = rs_sensor
 
         logger.info("Found {} devices", len(self._devices))
 
@@ -107,7 +105,7 @@ class Realsense:
             devices.append(info)
         return devices
 
-    def list_controls(self, sensor: Sensor) -> list[Option]:
+    def list_controls(self, sensor: str) -> list[Option]:
         """
         List controls supported by SENSOR
         """
@@ -138,7 +136,7 @@ class Realsense:
             res.append(opt)
         return res
 
-    def get_control_values(self, sensor: Sensor, controls: list[str]) -> dict[str, float]:
+    def get_control_values(self, sensor: str, controls: list[str]) -> dict[str, float]:
         """
         Get values for CONTROLS from SENSOR
         """
@@ -154,7 +152,7 @@ class Realsense:
             logger.debug('"{}" value: {}', option, res[control])
         return res
 
-    def set_control_values(self, sensor: Sensor, control_values: dict[str, float]) -> None:
+    def set_control_values(self, sensor: str, control_values: dict[str, float]) -> None:
         """
         Set CONTROL_VALUES on SENSOR
         """
@@ -167,11 +165,11 @@ class Realsense:
             if not option or not rs_sensor.supports(option):
                 logger.debug("no such option or not supported by sensor")
                 raise ValueError(
-                    f"control '{control}' is not supported for sensor '{sensor.value}'"
+                    f"control '{control}' is not supported for sensor '{sensor}'"
                 )
             rs_sensor.set_option(option, value)
 
-    def list_streams(self, sensor: Sensor) -> list[Profile]:
+    def list_streams(self, sensor: str) -> list[Profile]:
         """
         List supported streams for SENSOR
         """
@@ -189,7 +187,7 @@ class Realsense:
 
             res.append(
                 Profile(
-                    stream=Stream(profile.stream_name()),
+                    stream=profile.stream_name(),
                     resolution=Resolution(width, height),
                     fps=profile.fps(),
                     format=profile.format().name.upper(),
@@ -215,19 +213,25 @@ class Realsense:
         sensor_profiles = {}
         for sensor in self._sensors[self._active_device]:
             sensor_profiles[sensor] = self.list_streams(sensor)
-        origin_streams: dict[Stream, Sensor] = find_origin_sensor(sensor_profiles)
+        origin_streams: dict[str, str] = find_origin_sensor(sensor_profiles)
 
-        stream_profiles: dict[Sensor, list[Profile]] = {s: [] for s in origin_streams.values()}
+        stream_profiles: dict[str, list[Profile]] = {s: [] for s in origin_streams.values()}
         for profile in profiles:
             stream_profiles[origin_streams[profile.stream]].append(profile)
 
-        rs_stream_profiles: dict[Sensor, list[rs.stream_profile]] = defaultdict(list)
+        rs_stream_profiles: dict[str, list[rs.stream_profile]] = defaultdict(list)
         for sensor, sprofiles in stream_profiles.items():
             rs_sensor: rs.sensor = self._get_sensor(sensor)
             rs_profiles = rs_sensor.get_stream_profiles()
 
             for profile in sprofiles:
                 logger.debug(f"Looking a match for {profile}")
+
+                rs_stream_type = self._streams_map.get(profile.stream)
+                if rs_stream_type is None:
+                    raise RuntimeError(
+                        f"Unknown stream '{profile.stream}'. Cannot configure pyrealsense2 pipeline."
+                    )
 
                 skip_index = profile.index == -1
                 skip_fps = profile.fps == 0
@@ -250,7 +254,7 @@ class Realsense:
 
                     logger.debug(f"checking {rs_profile}...")
                     if (
-                        sp.stream_type() == self._streams_map[profile.stream]
+                        sp.stream_type() == rs_stream_type
                         and (skip_index or (sp.stream_index() == profile.index))
                         and (skip_format or (sp.format() == fmt))
                         and (skip_fps or (sp.fps() == profile.fps))
@@ -277,7 +281,11 @@ class Realsense:
         cfg.enable_device(self._active_device.get_info(rs.camera_info.serial_number))
         if profiles:
             for profile in profiles:
-                rs_stream = self._streams_map[profile.stream]
+                rs_stream = self._streams_map.get(profile.stream)
+                if rs_stream is None:
+                    raise RuntimeError(
+                        f"Unknown stream '{profile.stream}'. Cannot configure pyrealsense2 pipeline."
+                    )
                 rs_format = getattr(rs.format, profile.format.lower())
                 cfg.enable_stream(
                     rs_stream,
@@ -343,7 +351,7 @@ class Realsense:
             )
             logger.debug(
                 "{}\t#{} {:.2}ms - {}",
-                frame.profile.stream.value,
+                frame.profile.stream,
                 frame.index,
                 (time.time() - t1) * 1000,
                 frame,
@@ -359,15 +367,15 @@ class Realsense:
         """
         self._active_device.hardware_reset()
 
-    def _get_sensor(self, sensor: Sensor) -> rs.sensor:
+    def _get_sensor(self, sensor: str) -> rs.sensor:
         if sensor not in self._sensors[self._active_device]:
             raise RuntimeError(
-                f'Sensor "{sensor.value}" is not supported on device: {self._active_device.get_info(rs.camera_info.serial_number)}'
+                f'Sensor "{sensor}" is not supported on device: {self._active_device.get_info(rs.camera_info.serial_number)}'
             )
         return self._sensors[self._active_device][sensor]
 
     @property
-    def sensors(self) -> list[Sensor]:
+    def sensors(self) -> list[str]:
         return list(self._sensors[self._active_device].keys())
 
     @property

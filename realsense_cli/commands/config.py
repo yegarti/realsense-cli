@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 import typer
 
 from realsense_cli.driver import get_driver
-from realsense_cli.types import CliSensor
+from realsense_cli.types import resolve_sensor_name
 from realsense_cli.printer import list_options, list_options_values
 
 config_app = typer.Typer(help="Configure controls", no_args_is_help=True)
@@ -15,11 +15,11 @@ config_app = typer.Typer(help="Configure controls", no_args_is_help=True)
 )
 def config_list(
     sensor: Annotated[
-        CliSensor, typer.Argument(help="The sensor to configure", show_default=False)
+        str, typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False)
     ],
 ) -> None:
     driver = get_driver()
-    controls = driver.list_controls(sensor.rs_enum)
+    controls = driver.list_controls(resolve_sensor_name(sensor))
     list_options(controls)
 
 
@@ -28,7 +28,7 @@ def config_list(
 )
 def config_get(
     sensor: Annotated[
-        CliSensor, typer.Argument(help="The sensor to configure", show_default=False)
+        str, typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False)
     ],
     controls: Annotated[Optional[list[str]], typer.Argument(help="Controls to query")] = None,
     all_controls: Annotated[
@@ -36,21 +36,22 @@ def config_get(
     ] = False,
 ):
     driver = get_driver()
+    resolved = resolve_sensor_name(sensor)
     if not controls and not all_controls:
         typer.echo("Specify control names or use --all to query all controls.", err=True)
         raise typer.Exit(1)
     if not controls:
         controls = []
     if all_controls:
-        controls = [opt.name for opt in driver.list_controls(sensor.rs_enum)]
-    control_values = driver.get_control_values(sensor.rs_enum, controls)
+        controls = [opt.name for opt in driver.list_controls(resolved)]
+    control_values = driver.get_control_values(resolved, controls)
     list_options_values(control_values)
 
 
 @config_app.command(name="set", help="Set controls for given SENSOR")
 def config_set(
     sensor: Annotated[
-        CliSensor, typer.Argument(help="The sensor to configure", show_default=False)
+        str, typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False)
     ],
     controls_values: Annotated[
         list[str],
@@ -66,5 +67,5 @@ def config_set(
         except ValueError:
             print(f"Failed to parse control value pair: {ctrl_val}")
             raise typer.Abort()
-    driver.set_control_values(sensor.rs_enum, controls)
+    driver.set_control_values(resolve_sensor_name(sensor), controls)
     config_get(sensor, list(controls.keys()))

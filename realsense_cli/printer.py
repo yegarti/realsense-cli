@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.table import Table
 
 from realsense_cli.rs_bag_parser import TopicInfo
-from realsense_cli.types import DeviceInfo, Option, Sensor, Profile
+from realsense_cli.types import DeviceInfo, Option, Profile
 from realsense_cli.utils import group_profiles
 
 _console = Console(width=120)
@@ -29,12 +29,12 @@ def list_devices(devices: list[DeviceInfo]) -> None:
 
 def list_options(
     options: list[Option],
-    sensor: Optional[Sensor] = None,
+    sensor: Optional[str] = None,
 ):
     """
     Print a table showing sensor options
     """
-    title = f"{sensor.value} controls" if sensor else "Controls"
+    title = f"{sensor} controls" if sensor else "Controls"
     table = Table(title=title, box=box.SIMPLE)
     table.add_column("Name")
     table.add_column("Min Value")
@@ -77,7 +77,7 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
     groups = group_profiles(profiles)
     for profile, fps in groups.items():
         table.add_row(
-            profile.stream.value,
+            profile.stream,
             str(profile.resolution),
             "/".join(map(str, fps)),
             profile.format,

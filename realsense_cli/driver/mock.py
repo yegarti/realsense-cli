@@ -5,10 +5,8 @@ from typing import Optional
 
 from realsense_cli.types import (
     DeviceInfo,
-    Sensor,
     Option,
     Profile,
-    Stream,
     Resolution,
     FrameSet,
     Frame,
@@ -25,7 +23,7 @@ _default_config = {
         ),
     ],
     "sensors": {
-        Sensor.STEREO_MODULE: {
+        "Stereo Module": {
             "options": [
                 Option(
                     name="exposure",
@@ -56,15 +54,15 @@ _default_config = {
                 ),
             ],
             "profiles": [
-                Profile(Stream.DEPTH, Resolution(640, 480), 6, "z16"),
-                Profile(Stream.DEPTH, Resolution(640, 480), 15, "z16"),
-                Profile(Stream.DEPTH, Resolution(640, 480), 30, "z16"),
-                Profile(Stream.INFRARED, Resolution(640, 480), 15, "y8"),
-                Profile(Stream.INFRARED, Resolution(640, 480), 30, "y8"),
-                Profile(Stream.INFRARED2, Resolution(640, 480), 30, "y8"),
+                Profile("Depth", Resolution(640, 480), 6, "z16"),
+                Profile("Depth", Resolution(640, 480), 15, "z16"),
+                Profile("Depth", Resolution(640, 480), 30, "z16"),
+                Profile("Infrared 1", Resolution(640, 480), 15, "y8"),
+                Profile("Infrared 1", Resolution(640, 480), 30, "y8"),
+                Profile("Infrared 2", Resolution(640, 480), 30, "y8"),
             ],
         },
-        Sensor.RGB_CAMERA: {
+        "RGB Camera": {
             "options": [
                 Option(
                     name="brightness",
@@ -77,9 +75,9 @@ _default_config = {
                 ),
             ],
             "profiles": [
-                Profile(Stream.COLOR, Resolution(640, 480), 6, "rgb8"),
-                Profile(Stream.COLOR, Resolution(640, 480), 15, "rgb8"),
-                Profile(Stream.COLOR, Resolution(640, 480), 30, "rgb8"),
+                Profile("Color", Resolution(640, 480), 6, "rgb8"),
+                Profile("Color", Resolution(640, 480), 15, "rgb8"),
+                Profile("Color", Resolution(640, 480), 30, "rgb8"),
             ],
         },
     },
@@ -93,16 +91,16 @@ class MockDriver:
             config = _default_config
         self._config = config
         self._playing: list[Profile] = []
-        self._counters: dict[Stream, int] = defaultdict(int)
+        self._counters: dict[str, int] = defaultdict(int)
         self._active_serial: str = config["devices"][0].serial
 
     def query_devices(self) -> list[DeviceInfo]:
         return self._config["devices"]
 
-    def list_controls(self, sensor: Sensor) -> list[Option]:
+    def list_controls(self, sensor: str) -> list[Option]:
         return self._config["sensors"][sensor]["options"]
 
-    def get_control_values(self, sensor: Sensor, controls: list[str]) -> dict[str, float]:
+    def get_control_values(self, sensor: str, controls: list[str]) -> dict[str, float]:
         opts = self._config["sensors"][sensor]["options"]
         res = {}
         for control in controls:
@@ -111,10 +109,10 @@ class MockDriver:
                     res[opt.name] = opt.default_value
         return res
 
-    def set_control_values(self, sensor: Sensor, control_values: dict[str, float]) -> None:
+    def set_control_values(self, sensor: str, control_values: dict[str, float]) -> None:
         pass
 
-    def list_streams(self, sensor: Sensor) -> list[Profile]:
+    def list_streams(self, sensor: str) -> list[Profile]:
         return self._config["sensors"][sensor]["profiles"]
 
     def play(self, profiles: Optional[list[Profile]] = None, pipeline: bool = True) -> None:
@@ -144,7 +142,7 @@ class MockDriver:
         pass
 
     @property
-    def sensors(self) -> list[Sensor]:
+    def sensors(self) -> list[str]:
         return list(self._config["sensors"].keys())
 
     @property

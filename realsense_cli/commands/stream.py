@@ -6,22 +6,24 @@ from rich.live import Live
 
 from realsense_cli.driver import get_driver
 from realsense_cli.stream_view import StreamView
-from realsense_cli.types import CliSensor, CliStream, Profile, Resolution
+from realsense_cli.types import Profile, Resolution, resolve_sensor_name, _STREAM_ALIASES
 from realsense_cli.printer import list_profiles
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
+
+_STREAM_ALIASES_STR = ", ".join(_STREAM_ALIASES.keys())
 
 
 @stream_app.command(name="list", help="List supported streams for given SENSOR")
 def stream_list(
     sensors: Annotated[
-        Optional[list[CliSensor]],
-        typer.Argument(help="Sensor to query for streams", show_default=False),
+        Optional[list[str]],
+        typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False),
     ] = None,
 ) -> None:
     driver = get_driver()
     if sensors:
-        rs_sensors = [sensor.rs_enum for sensor in sensors]
+        rs_sensors = [resolve_sensor_name(s) for s in sensors]
     else:
         rs_sensors = driver.sensors
 
@@ -47,7 +49,7 @@ def stream_list(
                     'depth-0x0-30' - stream depth at any resolution, 30 fps\n
                     'color-640x480-0-rgb' - stream color at 640x480, any FPS, RGB format\n
                     \n
-                    Stream names: {','.join([str(s.value) for s in CliStream])}\n
+                    Stream aliases: {_STREAM_ALIASES_STR}\n
                     """,
 )
 def stream_play(
