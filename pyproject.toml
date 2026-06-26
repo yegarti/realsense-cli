@@ -17,9 +17,10 @@ rs = "realsense_cli.cli:app"
 
 [dependency-groups]
 dev = [
-    "mypy>=1.5.1",
+    "ty",
     "pytest>=7.4.1",
     "black>=23.9.1",
+    "poethepoet>=0.46.0",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -38,3 +39,10 @@ line-length=96
 [tool.pytest.ini_options]
 addopts = "-s -ra -m 'not hardware'"
 markers = ["hardware: requires a physical RealSense device to be connected"]
+
+[tool.poe.tasks]
+test = "pytest"
+typecheck = "ty check realsense_cli/"
+
+[tool.poe.tasks.check]
+sequence = ["test", "typecheck"]
