@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from loguru import logger
 
 if TYPE_CHECKING:
-    import pyrealsense2 as rs  # type: ignore
+    import pyrealsense2 as rs
 
 
 @dataclass
@@ -108,13 +108,12 @@ class Profile:
             raise ValueError(f"Failed to parse profile: '{profile}'")
 
     @classmethod
-    def from_rs(cls, profile: "rs.stream_profile") -> "Profile":
-        """Convert pyrealsense2 profile to Profile"""
-        import pyrealsense2 as rs  # type: ignore  # local — only used by real HW driver
+    def from_rs(cls, profile: Any) -> "Profile":
+        import pyrealsense2 as rs
 
         width, height = 0, 0
         if profile.is_video_stream_profile():
-            vsp: rs.video_stream_profile = profile.as_video_stream_profile()
+            vsp = profile.as_video_stream_profile()
             width, height = vsp.width(), vsp.height()
 
         return cls(

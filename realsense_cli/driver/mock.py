@@ -1,7 +1,7 @@
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TypedDict
 
 from realsense_cli.types import (
     DeviceInfo,
@@ -12,7 +12,17 @@ from realsense_cli.types import (
     Frame,
 )
 
-_default_config = {
+
+class _SensorConfig(TypedDict):
+    options: list[Option]
+    profiles: list[Profile]
+
+
+class _MockConfig(TypedDict):
+    devices: list[DeviceInfo]
+    sensors: dict[str, _SensorConfig]
+
+_default_config: _MockConfig = {
     "devices": [
         DeviceInfo(
             name="Intel Realsense D435",
@@ -86,10 +96,10 @@ _default_config = {
 
 @dataclass
 class MockDriver:
-    def __init__(self, config: Optional[dict] = None):
+    def __init__(self, config: Optional[_MockConfig] = None):
         if not config:
             config = _default_config
-        self._config = config
+        self._config: _MockConfig = config
         self._playing: list[Profile] = []
         self._counters: dict[str, int] = defaultdict(int)
         self._active_serial: str = config["devices"][0].serial

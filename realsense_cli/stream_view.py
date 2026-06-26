@@ -45,7 +45,7 @@ class StreamView(Panel):
                     name = md.replace("_", " ").title()
                     panel_str.append(f"{name.ljust(longest + 1)}={str(val).rjust(15)}")
             self._panels[stream].renderable = "\n".join(panel_str)
-            self._panels[stream].width = max(self._panels[stream].width, len(panel_str[-1]) + 4)
+            self._panels[stream].width = max(self._panels[stream].width or 0, len(panel_str[-1]) + 4)
 
     def _regroup(self, streams: Optional[list[str]]):
         logger.info("Regroup for streams {}", streams)

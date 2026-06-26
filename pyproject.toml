@@ -40,6 +40,9 @@ line-length=96
 addopts = "-s -ra -m 'not hardware'"
 markers = ["hardware: requires a physical RealSense device to be connected"]
 
+[tool.ty.src]
+exclude = ["realsense_cli/driver/realsense.py"]
+
 [tool.poe.tasks]
 test = "pytest"
 typecheck = "ty check realsense_cli/"
