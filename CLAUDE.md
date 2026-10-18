@@ -40,7 +40,10 @@ CI (`.github/workflows/ci.yml`) runs `just check` on PRs and pushes to `main`. T
 
 All hardware interaction goes through the driver interface in `driver/base.py`. `driver/__init__.py:get_driver()` returns the `Realsense` driver (`driver/realsense.py`), which wraps `pyrealsense2`.
 
-Tests run the real driver against a simulated D435 built on `rs.software_device` (`tests/software_device.py`), injected with `Realsense(devices=[...])` by the `driver` fixture in `tests/conftest.py`. No hardware is needed, and a connected camera is ignored. pyrealsense2 can't add a software device to an `rs.context`, so injected devices only stream with `play(pipeline=False)`, and frames arrive only when the test calls `camera.push_frames()`.
+`driver/software.py` simulates a D435 on `rs.software_device`, injected into the real driver with `Realsense(devices=[...])`. pyrealsense2 can't add a software device to an `rs.context`, so the pipeline can't see it, and `play()` on injected devices always streams through the sensor API. A software device only produces frames that are pushed to it.
+
+- `RSCLI_DRIVER=mock` runs the CLI against the simulated D435, with a background thread pushing frames (`start_frame_pump()`).
+- Tests get the same camera from the `driver` fixture in `tests/conftest.py` and push frames themselves with `camera.push_frames()`. No hardware is needed, and a connected camera is ignored.
 
 ### Commands
 

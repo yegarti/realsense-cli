@@ -3,9 +3,14 @@ Simulated cameras built on `rs.software_device`.
 
 The software device runs through the real `Realsense` driver code, so tests exercise the same
 pyrealsense2 calls as production. It produces no frames on its own: call
-`SoftwareCamera.push_frames()` to feed every active stream one frame.
+`SoftwareCamera.push_frames()` to feed every active stream one frame, or
+`start_frame_pump()` to keep feeding them from a background thread.
+
+The last profile listed for each stream in a `SensorSpec` is that stream's default.
 """
 
+import threading
+import time
 from dataclasses import dataclass, field
 from itertools import count
 
@@ -43,8 +48,9 @@ class SoftwareCamera:
         for spec in sensors:
             sensor = self.device.add_sensor(spec.name)
             self._sensors.append(sensor)
+            defaults = {p.stream: p for p in spec.profiles}
             for profile in spec.profiles:
-                _add_stream(sensor, profile, next(uid))
+                _add_stream(sensor, profile, next(uid), defaults[profile.stream] is profile)
             for option in spec.options:
                 rng = rs.option_range()
                 rng.min = option.min_value
@@ -54,6 +60,16 @@ class SoftwareCamera:
                 sensor.add_option(getattr(rs.option, option.name), rng, True)
             for name, value in spec.read_only_options.items():
                 sensor.add_read_only_option(getattr(rs.option, name), value)
+
+    def start_frame_pump(self, fps: int = 30) -> None:
+        """Push frames to active streams at FPS from a daemon thread until exit."""
+
+        def pump():
+            while True:
+                self.push_frames()
+                time.sleep(1 / fps)
+
+        threading.Thread(target=pump, name="software-camera-pump", daemon=True).start()
 
     def push_frames(self) -> None:
         """Push one frame to every stream currently started on the device."""
@@ -81,7 +97,9 @@ class SoftwareCamera:
                 push(frame)
 
 
-def _add_stream(sensor: rs.software_sensor, profile: Profile, uid: int) -> None:
+def _add_stream(
+    sensor: rs.software_sensor, profile: Profile, uid: int, is_default: bool
+) -> None:
     stream_type = getattr(rs.stream, profile.stream.split()[0].lower())
     index = max(profile.index, 0)
     fmt = getattr(rs.format, profile.format.lower())
@@ -98,9 +116,9 @@ def _add_stream(sensor: rs.software_sensor, profile: Profile, uid: int) -> None:
     stream.fps = profile.fps
     stream.fmt = fmt
     if isinstance(stream, rs.motion_stream):
-        sensor.add_motion_stream(stream)
+        sensor.add_motion_stream(stream, is_default)
     else:
-        sensor.add_video_stream(stream)
+        sensor.add_video_stream(stream, is_default)
 
 
 def _video(stream: str, fps: int, fmt: str, index: int = -1) -> Profile:

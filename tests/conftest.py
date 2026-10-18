@@ -4,8 +4,8 @@ import pytest
 
 from realsense_cli.driver import reset_driver
 from realsense_cli.driver.realsense import Realsense
+from realsense_cli.driver.software import SoftwareCamera, d435
 from realsense_cli.types import Frame, FrameSet, Profile
-from tests.software_device import SoftwareCamera, d435
 
 
 @pytest.fixture(autouse=True)

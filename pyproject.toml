@@ -45,5 +45,6 @@ addopts = "-s -ra -m 'not hardware'"
 markers = ["hardware: requires a physical RealSense device to be connected"]
 
 [tool.ty.src]
-exclude = ["realsense_cli/driver/realsense.py"]
+# pyrealsense2 ships no type stubs
+exclude = ["realsense_cli/driver/realsense.py", "realsense_cli/driver/software.py"]
 

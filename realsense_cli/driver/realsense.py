@@ -205,14 +205,19 @@ class Realsense:
         Start streaming selected profiles
         """
         logger.info("Playing profiles: {}", profiles)
+        if pipeline and self._injected_devices is not None:
+            logger.info("pipeline cannot see injected devices, streaming with sensor API")
+            pipeline = False
         if pipeline:
             self._stream_pipe(profiles)
         else:
             self._stream_sensor(profiles)
         self._streaming = True
 
-    def _stream_sensor(self, profiles: list[Profile]):
+    def _stream_sensor(self, profiles: list[Profile] | None):
         self._stream_method = "sensor"
+        if not profiles:
+            profiles = self._default_profiles()
         sensor_profiles = {}
         for sensor in self._sensors[self._active_device]:
             sensor_profiles[sensor] = self.list_streams(sensor)
@@ -278,6 +283,14 @@ class Realsense:
             rs_sensor = self._get_sensor(sensor)
             rs_sensor.open(rs_profiles)
             rs_sensor.start(self._frame_queue)
+
+    def _default_profiles(self) -> list[Profile]:
+        return [
+            Profile.from_rs(rs_profile)
+            for rs_sensor in self._sensors[self._active_device].values()
+            for rs_profile in rs_sensor.get_stream_profiles()
+            if rs_profile.is_default()
+        ]
 
     def _stream_pipe(self, profiles):
         self._stream_method = "pipe"

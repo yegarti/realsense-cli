@@ -1,7 +1,7 @@
 import pytest
 
 from realsense_cli.driver.realsense import Realsense
-from tests.software_device import D435, D435_SENSORS
+from realsense_cli.driver.software import D435, D435_SENSORS
 
 STEREO = D435_SENSORS[0]
 
@@ -60,5 +60,27 @@ def test_stream_motion(driver, camera):
         frameset = driver.wait_for_frameset()
         assert frameset is not None
         assert list(frameset) == ["Gyro"]
+    finally:
+        driver.stop()
+
+
+def test_play_without_profiles_streams_defaults(driver, camera):
+    driver.play()
+    try:
+        active = {
+            (p.stream_name(), p.fps())
+            for sensor in camera.device.sensors
+            for p in sensor.get_active_streams()
+        }
+        assert active == {
+            ("Depth", 30),
+            ("Infrared 1", 30),
+            ("Infrared 2", 30),
+            ("Color", 30),
+            ("Gyro", 200),
+            ("Accel", 63),
+        }
+        camera.push_frames()
+        assert driver.wait_for_frameset() is not None
     finally:
         driver.stop()

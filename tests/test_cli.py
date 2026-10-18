@@ -2,9 +2,10 @@ import pytest
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
+from realsense_cli.driver import get_driver
 from realsense_cli.driver.realsense import Realsense
+from realsense_cli.driver.software import D435, D435_SENSORS, SensorSpec, SoftwareCamera
 from realsense_cli.types import DeviceInfo, Option, Profile, Resolution
-from tests.software_device import D435, D435_SENSORS, SensorSpec, SoftwareCamera
 
 runner = CliRunner()
 
@@ -188,3 +189,29 @@ def test_stream_list_full_sensor_name(driver):
     result = runner.invoke(app, ["stream", "list", "RGB Camera"])
     assert result.exit_code == 0
     assert "Color" in result.output
+
+
+def test_mock_driver_env_var(monkeypatch):
+    monkeypatch.setenv("RSCLI_DRIVER", "mock")
+    result = runner.invoke(app, ["list"])
+    assert result.exit_code == 0
+    assert D435.serial in result.stdout
+
+
+def test_mock_driver_streams_on_its_own(monkeypatch):
+    monkeypatch.setenv("RSCLI_DRIVER", "mock")
+    driver = get_driver()
+    driver.play([Profile("Depth", Resolution(640, 480), 30, "z16")])
+    try:
+        first = driver.wait_for_frameset()
+        second = driver.wait_for_frameset()
+        assert first is not None and second is not None
+        assert second["Depth"].index > first["Depth"].index
+    finally:
+        driver.stop()
+
+
+def test_unknown_driver_env_var(monkeypatch):
+    monkeypatch.setenv("RSCLI_DRIVER", "bogus")
+    with pytest.raises(ValueError, match="bogus"):
+        get_driver()
