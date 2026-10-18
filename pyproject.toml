@@ -6,10 +6,10 @@ authors = [{ name = "Yehuda Garti", email = "yeudag@gmail.com" }]
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
-    "typer>=0.12.0",
-    "pyrealsense2>=2.54.1",
-    "loguru>=0.7.0",
-    "rosbags>=0.9.19",
+    "typer>=0.27.3",
+    "pyrealsense2>=2.59.1",
+    "loguru>=0.7.3",
+    "rosbags>=0.11.8",
 ]
 
 [project.scripts]
@@ -17,10 +17,10 @@ rs = "realsense_cli.cli:app"
 
 [dependency-groups]
 dev = [
-    "ty",
-    "pytest>=7.4.1",
-    "pytest-cov>=5.0.0",
-    "ruff>=0.6.0",
+    "ty>=0.0.89",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.17.1",
 ]
 
 [tool.hatch.build.targets.sdist]
