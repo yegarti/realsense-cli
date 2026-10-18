@@ -21,3 +21,26 @@ jobs:
         run: uv sync --locked
       - name: Run checks
         run: just check
+
+  test:
+    name: test (pyrealsense2 ${{ matrix.pyrealsense2 }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pyrealsense2: ["2.59.1.11053"]
+    env:
+      # keep `uv run` from re-syncing back to the locked pyrealsense2
+      UV_NO_SYNC: 1
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+      - name: Install just
+        uses: extractions/setup-just@v4
+      - name: Install dependencies
+        run: uv sync --locked
+      - name: Install pyrealsense2 ${{ matrix.pyrealsense2 }}
+        run: uv pip install "pyrealsense2==${{ matrix.pyrealsense2 }}"
+      - name: Run tests
+        run: just test
