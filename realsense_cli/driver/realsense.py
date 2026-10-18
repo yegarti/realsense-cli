@@ -20,9 +20,15 @@ class Realsense:
     pyrealsense2 wrapper driver
     """
 
-    def __init__(self):
+    def __init__(self, devices: list[rs.device] | None = None):
+        """
+        DEVICES overrides the devices enumerated from the context, e.g. `rs.software_device`
+        instances, which pyrealsense2 cannot add to a context. The pipeline API only sees
+        context devices, so injected devices stream with `play(pipeline=False)`.
+        """
         logger.info("Instancing Realsense driver")
         self._ctx: rs.context = rs.context()
+        self._injected_devices = devices
         self._devices: list[rs.device] = []
         self._sensors: dict[rs.device, dict[str, rs.sensor]] = {}
         self._streams_map: dict[str, rs.stream] = {
@@ -56,7 +62,10 @@ class Realsense:
         self._prep_valid_md_attrs()
 
     def _query(self):
-        for dev in self._ctx.devices:
+        devices = (
+            self._ctx.devices if self._injected_devices is None else self._injected_devices
+        )
+        for dev in devices:
             logger.debug("Adding device: {}", dev)
             self._devices.append(dev)
             self._sensors[dev] = {}

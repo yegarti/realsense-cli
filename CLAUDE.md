@@ -38,11 +38,9 @@ CI (`.github/workflows/ci.yml`) runs `just check` on PRs and pushes to `main`. T
 
 ### Driver abstraction
 
-All hardware interaction goes through a driver interface. `driver/__init__.py:get_driver()` returns either:
-- `driver/realsense.py` — wraps `pyrealsense2` (production, default)
-- `driver/mock.py` — simulates a D435 camera (testing, set `RSCLI_DRIVER=mock`)
+All hardware interaction goes through the driver interface in `driver/base.py`. `driver/__init__.py:get_driver()` returns the `Realsense` driver (`driver/realsense.py`), which wraps `pyrealsense2`.
 
-Tests always use the mock driver via the fixture in `tests/conftest.py`.
+Tests run the real driver against a simulated D435 built on `rs.software_device` (`tests/software_device.py`), injected with `Realsense(devices=[...])` by the `driver` fixture in `tests/conftest.py`. No hardware is needed, and a connected camera is ignored. pyrealsense2 can't add a software device to an `rs.context`, so injected devices only stream with `play(pipeline=False)`, and frames arrive only when the test calls `camera.push_frames()`.
 
 ### Commands
 

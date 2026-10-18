@@ -1,4 +1,3 @@
-import os
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -10,16 +9,9 @@ _driver: Optional["DriverProtocol"] = None
 def get_driver() -> "DriverProtocol":
     global _driver
     if _driver is None:
-        from realsense_cli.driver.mock import MockDriver
         from realsense_cli.driver.realsense import Realsense
 
-        match os.environ.get("RSCLI_DRIVER", "realsense"):
-            case "realsense":
-                _driver = Realsense()
-            case "mock":
-                _driver = MockDriver()
-            case t:
-                raise ValueError(f"Unknown driver: {t}")
+        _driver = Realsense()
     return _driver
 
 
