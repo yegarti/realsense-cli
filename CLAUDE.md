@@ -63,3 +63,17 @@ Tests always use the mock driver via the fixture in `tests/conftest.py`.
 ## Code style
 
 Line length: 96 (Black). Python 3.11+.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues on `yegarti/realsense-cli` (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
