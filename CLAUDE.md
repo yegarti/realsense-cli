@@ -11,18 +11,26 @@ uv sync
 # Run CLI
 uv run rs
 
-# Run tests
-uv run pytest
+# Run lint, type check and tests (what CI runs)
+just check
 
-# Format code
-uv run black realsense_cli/
+# Run tests with coverage (extra args go to pytest)
+just test
 
-# Type check
-uv run mypy realsense_cli/
+# Lint and check formatting (ruff)
+just lint
+
+# Format code and apply lint fixes (ruff)
+just fmt
+
+# Type check (ty)
+just typecheck
 
 # Run a single test
-uv run pytest tests/test_cli.py::test_list_devices -s
+just test tests/test_cli.py::test_list
 ```
+
+CI (`.github/workflows/ci.yml`) runs `just check` on PRs and pushes to `main`. Tests marked `hardware` are excluded by default.
 
 ## Architecture
 
@@ -58,11 +66,11 @@ Tests always use the mock driver via the fixture in `tests/conftest.py`.
 
 `printer.py` handles Rich table formatting for device/profile/control listings. `stream_view.py` renders the live stream display using Rich Live.
 
-`rs_bag_parser.py` uses `rosbags` to parse ROS2 bag files without a ROS installation.
+`rs_bag_parser.py` uses `rosbags` (the rosbag1 `Reader`) to parse ROS1 bag files without a ROS installation.
 
 ## Code style
 
-Line length: 96 (Black). Python 3.11+.
+Formatting and linting with ruff (`just fmt` / `just lint`), line length 96. Python 3.11+.
 
 ## Agent skills
 

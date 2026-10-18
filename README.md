@@ -13,7 +13,7 @@
 - **List** connected devices and their supported streaming profiles
 - **Configure** sensor controls (exposure, gain, laser power, etc.)
 - **Stream** selected profiles and monitor live FPS per stream
-- **Inspect** ROS bag files without a full ROS installation
+- **Inspect** ROS1 bag files without a full ROS installation
 - Multi-device support via `--serial`
 
 ---
@@ -52,10 +52,12 @@ uv sync
 uv run rs --help
 ```
 
-**Run tests:**
+**Checks** (requires [`just`](https://github.com/casey/just)):
 ```sh
-uv run pytest                  # mock tests only (no camera required)
-uv run pytest -m hardware      # hardware integration tests (camera required)
+just check                     # lint, type check and tests, as CI runs them
+just test                      # tests with coverage (no camera required)
+just test -m hardware          # hardware integration tests (camera required)
+just fmt                       # format and apply lint fixes with ruff
 ```
 
 ---
