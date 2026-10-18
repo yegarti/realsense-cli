@@ -20,9 +20,15 @@ class Realsense:
     pyrealsense2 wrapper driver
     """
 
-    def __init__(self):
+    def __init__(self, devices: list[rs.device] | None = None):
+        """
+        DEVICES overrides the devices enumerated from the context, e.g. `rs.software_device`
+        instances, which pyrealsense2 cannot add to a context. The pipeline API only sees
+        context devices, so injected devices stream with `play(pipeline=False)`.
+        """
         logger.info("Instancing Realsense driver")
         self._ctx: rs.context = rs.context()
+        self._injected_devices = devices
         self._devices: list[rs.device] = []
         self._sensors: dict[rs.device, dict[str, rs.sensor]] = {}
         self._streams_map: dict[str, rs.stream] = {
@@ -56,7 +62,10 @@ class Realsense:
         self._prep_valid_md_attrs()
 
     def _query(self):
-        for dev in self._ctx.devices:
+        devices = (
+            self._ctx.devices if self._injected_devices is None else self._injected_devices
+        )
+        for dev in devices:
             logger.debug("Adding device: {}", dev)
             self._devices.append(dev)
             self._sensors[dev] = {}
@@ -196,14 +205,19 @@ class Realsense:
         Start streaming selected profiles
         """
         logger.info("Playing profiles: {}", profiles)
+        if pipeline and self._injected_devices is not None:
+            logger.info("pipeline cannot see injected devices, streaming with sensor API")
+            pipeline = False
         if pipeline:
             self._stream_pipe(profiles)
         else:
             self._stream_sensor(profiles)
         self._streaming = True
 
-    def _stream_sensor(self, profiles: list[Profile]):
+    def _stream_sensor(self, profiles: list[Profile] | None):
         self._stream_method = "sensor"
+        if not profiles:
+            profiles = self._default_profiles()
         sensor_profiles = {}
         for sensor in self._sensors[self._active_device]:
             sensor_profiles[sensor] = self.list_streams(sensor)
@@ -269,6 +283,14 @@ class Realsense:
             rs_sensor = self._get_sensor(sensor)
             rs_sensor.open(rs_profiles)
             rs_sensor.start(self._frame_queue)
+
+    def _default_profiles(self) -> list[Profile]:
+        return [
+            Profile.from_rs(rs_profile)
+            for rs_sensor in self._sensors[self._active_device].values()
+            for rs_profile in rs_sensor.get_stream_profiles()
+            if rs_profile.is_default()
+        ]
 
     def _stream_pipe(self, profiles):
         self._stream_method = "pipe"

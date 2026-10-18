@@ -1,9 +1,10 @@
-import os
 import random
 
 import pytest
 
-from realsense_cli.driver import get_driver, reset_driver
+from realsense_cli.driver import reset_driver
+from realsense_cli.driver.realsense import Realsense
+from realsense_cli.driver.software import SoftwareCamera, d435
 from realsense_cli.types import Frame, FrameSet, Profile
 
 
@@ -15,27 +16,26 @@ def _reset_driver():
     reset_driver()
 
 
-@pytest.fixture(autouse=True)
-def set_mock_envar():
-    os.environ["RSCLI_DRIVER"] = "mock"
+@pytest.fixture
+def camera() -> SoftwareCamera:
+    return d435()
 
 
 @pytest.fixture
-def mock_context(monkeypatch):
-    import pyrealsense2 as rs
+def make_driver(monkeypatch):
+    """Build the real driver over a software camera, also served to CLI commands."""
 
-    from tests.utils import MOCK_DEVICE, MOCK_SENSORS, build_software_device
+    def make(camera: SoftwareCamera) -> Realsense:
+        drv = Realsense(devices=[camera.device])
+        monkeypatch.setattr("realsense_cli.driver._driver", drv)
+        return drv
 
-    ctx = rs.context()
-    dev = build_software_device(MOCK_DEVICE, MOCK_SENSORS["profiles"], MOCK_SENSORS["options"])
-    dev.add_to(ctx)
-    monkeypatch.setattr(rs, "context", lambda: ctx)
-    yield
+    return make
 
 
 @pytest.fixture
-def driver():
-    yield get_driver()
+def driver(camera, make_driver) -> Realsense:
+    return make_driver(camera)
 
 
 @pytest.fixture
