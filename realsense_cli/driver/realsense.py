@@ -1,20 +1,17 @@
 import time
 from collections import defaultdict
-from typing import Optional
 
+import pyrealsense2 as rs  # type: ignore
 from loguru import logger
 
 from realsense_cli.types import (
     DeviceInfo,
+    Frame,
+    FrameSet,
     Option,
     Profile,
     Resolution,
-    FrameSet,
-    Frame,
 )
-
-import pyrealsense2 as rs  # type: ignore
-
 from realsense_cli.utils import find_origin_sensor
 
 
@@ -41,7 +38,7 @@ class Realsense:
 
         self._setup()
         if self._devices:
-            logger.debug(f"setting first device as active one")
+            logger.debug("setting first device as active one")
             # sorting to be deterministic every run
             self._active_device = sorted(
                 [(d.get_info(rs.camera_info.serial_number), d) for d in self._devices]
@@ -51,7 +48,7 @@ class Realsense:
         logger.info("active device: {}", self._active_device)
         self._streaming = False
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
-        self._pipe_profile: Optional[rs.pipeline_profile] = None
+        self._pipe_profile: rs.pipeline_profile | None = None
         self._frame_queue: rs.frame_queue = rs.frame_queue(capacity=1)
 
     def _setup(self) -> None:
@@ -82,12 +79,11 @@ class Realsense:
         Query connected devices
         """
         devices = []
-        rsdev: rs.device
         for device, sensors in self._sensors.items():
             rs_sensors = [s for s in sensors.values()]
             logger.debug("adding device info for device {}", device)
 
-            def _safe_get_info(info: rs.camera_info):
+            def _safe_get_info(info: rs.camera_info, device=device):
                 try:
                     return device.get_info(info)
                 except Exception as e:
@@ -164,9 +160,7 @@ class Realsense:
             logger.debug('setting "{}" with value {}', option, value)
             if not option or not rs_sensor.supports(option):
                 logger.debug("no such option or not supported by sensor")
-                raise ValueError(
-                    f"control '{control}' is not supported for sensor '{sensor}'"
-                )
+                raise ValueError(f"control '{control}' is not supported for sensor '{sensor}'")
             rs_sensor.set_option(option, value)
 
     def list_streams(self, sensor: str) -> list[Profile]:
@@ -197,7 +191,7 @@ class Realsense:
             logger.debug("adding profile {}", res[-1])
         return res
 
-    def play(self, profiles: Optional[list[Profile]] = None, pipeline: bool = True) -> None:
+    def play(self, profiles: list[Profile] | None = None, pipeline: bool = True) -> None:
         """
         Start streaming selected profiles
         """
@@ -230,7 +224,8 @@ class Realsense:
                 rs_stream_type = self._streams_map.get(profile.stream)
                 if rs_stream_type is None:
                     raise RuntimeError(
-                        f"Unknown stream '{profile.stream}'. Cannot configure pyrealsense2 pipeline."
+                        f"Unknown stream '{profile.stream}'. "
+                        "Cannot configure pyrealsense2 pipeline."
                     )
 
                 skip_index = profile.index == -1
@@ -284,7 +279,8 @@ class Realsense:
                 rs_stream = self._streams_map.get(profile.stream)
                 if rs_stream is None:
                     raise RuntimeError(
-                        f"Unknown stream '{profile.stream}'. Cannot configure pyrealsense2 pipeline."
+                        f"Unknown stream '{profile.stream}'. "
+                        "Cannot configure pyrealsense2 pipeline."
                     )
                 rs_format = getattr(rs.format, profile.format.lower())
                 cfg.enable_stream(
@@ -314,7 +310,7 @@ class Realsense:
                     rs_sensor.close()
         self._streaming = False
 
-    def wait_for_frameset(self, timeout: float = 3.0) -> Optional[FrameSet]:
+    def wait_for_frameset(self, timeout: float = 3.0) -> FrameSet | None:
         """
         Get next frameset waiting in queue.
         return None when no frameset arrive after timeout
@@ -370,7 +366,8 @@ class Realsense:
     def _get_sensor(self, sensor: str) -> rs.sensor:
         if sensor not in self._sensors[self._active_device]:
             raise RuntimeError(
-                f'Sensor "{sensor}" is not supported on device: {self._active_device.get_info(rs.camera_info.serial_number)}'
+                f'Sensor "{sensor}" is not supported on device: '
+                f"{self._active_device.get_info(rs.camera_info.serial_number)}"
             )
         return self._sensors[self._active_device][sensor]
 
@@ -383,7 +380,7 @@ class Realsense:
         return self._active_device.get_info(rs.camera_info.serial_number)
 
     @active_device.setter
-    def active_device(self, serial: Optional[str] = None):
+    def active_device(self, serial: str | None = None):
         if not serial:
             return
         for dev in self._devices:

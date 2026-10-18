@@ -4,8 +4,7 @@ from itertools import count
 
 import pyrealsense2 as rs
 
-from realsense_cli.types import DeviceInfo, Profile, Resolution, Option
-
+from realsense_cli.types import DeviceInfo, Option, Profile, Resolution
 
 MOCK_DEVICE: DeviceInfo = DeviceInfo(
     name="Intel RealSense D435",

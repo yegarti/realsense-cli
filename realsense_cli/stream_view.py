@@ -1,27 +1,24 @@
-from dataclasses import dataclass
-from typing import Optional, Any
-
 from loguru import logger
-from rich.box import SIMPLE, SIMPLE_HEAD
-from rich.console import RenderableType, Group, group
+from rich.box import SIMPLE_HEAD
+from rich.console import Group
 from rich.panel import Panel
 
-from realsense_cli.types import FrameSet, Frame, Profile
+from realsense_cli.types import Frame, FrameSet, Profile
 
 
 class StreamView(Panel):
-    def __init__(self, streams: Optional[list[str]] = None, metadata: bool = True):
+    def __init__(self, streams: list[str] | None = None, metadata: bool = True):
         logger.info("StreamView created")
         self._metadata = metadata
         self._dynamic = not streams
         self._panels: dict[str, Panel] = {}
         self._title_set: dict[str, bool] = {}
-        self._prev_frame: dict[str, Optional[Frame]] = {}
+        self._prev_frame: dict[str, Frame | None] = {}
         self._regroup(streams)
 
         super().__init__(Group(*self._panels.values()), box=SIMPLE_HEAD, title_align="center")
 
-    def update(self, frames: Optional[FrameSet]):
+    def update(self, frames: FrameSet | None):
         if not frames:
             frames = {}
         logger.debug("updating view for frameset {}", frames.keys())
@@ -45,9 +42,11 @@ class StreamView(Panel):
                     name = md.replace("_", " ").title()
                     panel_str.append(f"{name.ljust(longest + 1)}={str(val).rjust(15)}")
             self._panels[stream].renderable = "\n".join(panel_str)
-            self._panels[stream].width = max(self._panels[stream].width or 0, len(panel_str[-1]) + 4)
+            self._panels[stream].width = max(
+                self._panels[stream].width or 0, len(panel_str[-1]) + 4
+            )
 
-    def _regroup(self, streams: Optional[list[str]]):
+    def _regroup(self, streams: list[str] | None):
         logger.info("Regroup for streams {}", streams)
         if not streams:
             streams = []
@@ -64,13 +63,10 @@ class StreamView(Panel):
         return self._panels
 
     def _gen_panel_title(self, profile: Profile) -> str:
-        return "{stream} ({index}) {width}x{height} {fps}fps {format}".format(
-            stream=profile.stream,
-            index=profile.index,
-            width=profile.resolution.width,
-            height=profile.resolution.height,
-            format=profile.format,
-            fps=profile.fps,
+        res = profile.resolution
+        return (
+            f"{profile.stream} ({profile.index}) {res.width}x{res.height} "
+            f"{profile.fps}fps {profile.format}"
         )
 
     def _calc_fps(self, frame: Frame) -> float:
@@ -81,9 +77,7 @@ class StreamView(Panel):
             return 0
         num = frame.index - prev_frame.index
         delta = frame.timestamp - prev_frame.timestamp
-        logger.debug(
-            "calc fps {} - num = {}, delta = {}", frame.profile.stream, num, delta
-        )
+        logger.debug("calc fps {} - num = {}, delta = {}", frame.profile.stream, num, delta)
         self._prev_frame[stream] = frame
         if not delta:
             return 0

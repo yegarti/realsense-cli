@@ -3,7 +3,7 @@ from typer.testing import CliRunner
 
 from realsense_cli.cli import app
 from realsense_cli.driver.mock import MockDriver
-from realsense_cli.types import DeviceInfo, Option, Profile, Resolution, resolve_sensor_name
+from realsense_cli.types import DeviceInfo, Option, Profile, Resolution
 
 runner = CliRunner()
 
@@ -67,7 +67,7 @@ def test_config_get(driver, sensor_alias, sensor_name, controls):
     ],
 )
 def test_config_set(driver, sensor_alias, sensor_name, controls, vals):
-    setstrs = [f"{c}={v}" for c, v in zip(controls, vals)]
+    setstrs = [f"{c}={v}" for c, v in zip(controls, vals, strict=True)]
     result = runner.invoke(app, ["config", "set", sensor_alias, *setstrs])
     opts = {}
     for option in driver.list_controls(sensor_name):
@@ -115,6 +115,7 @@ def test_stream_list(driver, sensor_alias, sensor_name):
 
 
 # --- Robustness tests: new/unknown sensors and streams ---
+
 
 @pytest.fixture
 def future_driver():

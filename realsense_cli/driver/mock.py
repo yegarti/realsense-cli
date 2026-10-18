@@ -1,15 +1,15 @@
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from realsense_cli.types import (
     DeviceInfo,
+    Frame,
+    FrameSet,
     Option,
     Profile,
     Resolution,
-    FrameSet,
-    Frame,
 )
 
 
@@ -21,6 +21,7 @@ class _SensorConfig(TypedDict):
 class _MockConfig(TypedDict):
     devices: list[DeviceInfo]
     sensors: dict[str, _SensorConfig]
+
 
 _default_config: _MockConfig = {
     "devices": [
@@ -96,7 +97,7 @@ _default_config: _MockConfig = {
 
 @dataclass
 class MockDriver:
-    def __init__(self, config: Optional[_MockConfig] = None):
+    def __init__(self, config: _MockConfig | None = None):
         if not config:
             config = _default_config
         self._config: _MockConfig = config
@@ -125,14 +126,14 @@ class MockDriver:
     def list_streams(self, sensor: str) -> list[Profile]:
         return self._config["sensors"][sensor]["profiles"]
 
-    def play(self, profiles: Optional[list[Profile]] = None, pipeline: bool = True) -> None:
+    def play(self, profiles: list[Profile] | None = None, pipeline: bool = True) -> None:
         self._playing = profiles if profiles is not None else self._all_profiles()
         self._counters = defaultdict(int)
 
     def stop(self) -> None:
         self._playing = []
 
-    def wait_for_frameset(self, timeout: float = 3.0) -> Optional[FrameSet]:
+    def wait_for_frameset(self, timeout: float = 3.0) -> FrameSet | None:
         if not self._playing:
             return None
         now = time.monotonic() * 1000
@@ -160,7 +161,7 @@ class MockDriver:
         return self._active_serial
 
     @active_device.setter
-    def active_device(self, serial: Optional[str] = None) -> None:
+    def active_device(self, serial: str | None = None) -> None:
         if serial:
             self._active_serial = serial
 

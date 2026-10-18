@@ -1,7 +1,7 @@
 import pytest
 
 from realsense_cli.types import Profile, Resolution
-from realsense_cli.utils import group_profiles, find_origin_sensor
+from realsense_cli.utils import find_origin_sensor, group_profiles
 
 
 def test_group_profiles():
@@ -65,6 +65,7 @@ def test_find_origin_sensor(profiles, expected):
 
 
 # --- Robustness: unknown streams and sensors don't crash ---
+
 
 def test_group_profiles_unknown_stream():
     profiles = [Profile("Future Stream", Resolution(640, 480), 30, "rgb8")]

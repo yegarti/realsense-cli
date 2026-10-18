@@ -1,13 +1,13 @@
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from loguru import logger
 from rich.live import Live
 
 from realsense_cli.driver import get_driver
-from realsense_cli.stream_view import StreamView
-from realsense_cli.types import Profile, Resolution, resolve_sensor_name, _STREAM_ALIASES
 from realsense_cli.printer import list_profiles
+from realsense_cli.stream_view import StreamView
+from realsense_cli.types import _STREAM_ALIASES, Profile, resolve_sensor_name
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
 
@@ -17,7 +17,7 @@ _STREAM_ALIASES_STR = ", ".join(_STREAM_ALIASES.keys())
 @stream_app.command(name="list", help="List supported streams for given SENSOR")
 def stream_list(
     sensors: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False),
     ] = None,
 ) -> None:
@@ -54,7 +54,7 @@ def stream_list(
 )
 def stream_play(
     profiles: Annotated[
-        Optional[list[Profile]],
+        list[Profile] | None,
         typer.Argument(help="Profiles to play", show_default=False, parser=Profile.from_string),
     ] = None,
     api: Annotated[
@@ -79,10 +79,10 @@ def stream_play(
         print("Requested profiles:")
         for profile in profiles:
             print(f"\t{profile}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
     try:
-        with Live(view, refresh_per_second=30) as live:
+        with Live(view, refresh_per_second=30):
             while True:
                 frameset = driver.wait_for_frameset()
                 if frameset is None:

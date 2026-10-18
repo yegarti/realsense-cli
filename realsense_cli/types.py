@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from loguru import logger
 
 if TYPE_CHECKING:
-    import pyrealsense2 as rs
+    pass
 
 
 @dataclass
@@ -63,8 +63,8 @@ class Resolution(NamedTuple):
     def from_string(cls, res: str):
         try:
             width, height = [int(n) for n in res.split("x")]
-        except Exception:
-            raise ValueError(f"Failed to parse resolution provided: {res}")
+        except Exception as e:
+            raise ValueError(f"Failed to parse resolution provided: {res}") from e
         return Resolution(width, height)
 
     def __str__(self):
@@ -105,11 +105,10 @@ class Profile:
             return cls(stream, res, fps, fmt)
         except Exception as e:
             logger.error(e)
-            raise ValueError(f"Failed to parse profile: '{profile}'")
+            raise ValueError(f"Failed to parse profile: '{profile}'") from e
 
     @classmethod
     def from_rs(cls, profile: Any) -> "Profile":
-        import pyrealsense2 as rs
 
         width, height = 0, 0
         if profile.is_video_stream_profile():

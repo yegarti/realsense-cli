@@ -1,4 +1,5 @@
 import pytest
+
 from realsense_cli.driver.realsense import Realsense
 from tests.utils import MOCK_DEVICE, MOCK_SENSORS
 

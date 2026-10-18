@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any
 
 from rich import box
 from rich.console import Console
@@ -29,7 +29,7 @@ def list_devices(devices: list[DeviceInfo]) -> None:
 
 def list_options(
     options: list[Option],
-    sensor: Optional[str] = None,
+    sensor: str | None = None,
 ):
     """
     Print a table showing sensor options

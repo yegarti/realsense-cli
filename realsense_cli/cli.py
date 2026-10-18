@@ -1,8 +1,8 @@
 import sys
 from typing import Annotated
 
-from loguru import logger
 import typer
+from loguru import logger
 
 from realsense_cli.commands.bag import bag_app
 from realsense_cli.commands.config import config_app
@@ -65,7 +65,7 @@ def callback(
         driver.active_device = serial
     except ValueError:
         print(f"Serial {serial} does not match any connected device:")
-        raise typer.Abort()
+        raise typer.Abort() from None
 
     if ctx.invoked_subcommand not in ("list", "bag") and {"-h", "--help"}.isdisjoint(sys.argv):
         logger.debug("checking device exist for subcommand '{}'", ctx.invoked_subcommand)
@@ -77,6 +77,6 @@ def callback(
         if dev_n > 1 and not serial:
             logger.warning("Multiple devices without serial!")
             print(
-                f"Multiple devices are connected but no serial provided, using device: '{driver.active_device}'"
+                "Multiple devices are connected but no serial provided, "
+                f"using device: '{driver.active_device}'"
             )
-

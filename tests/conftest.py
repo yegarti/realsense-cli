@@ -4,7 +4,7 @@ import random
 import pytest
 
 from realsense_cli.driver import get_driver, reset_driver
-from realsense_cli.types import Profile, FrameSet, Frame
+from realsense_cli.types import Frame, FrameSet, Profile
 
 
 @pytest.fixture(autouse=True)
@@ -23,7 +23,8 @@ def set_mock_envar():
 @pytest.fixture
 def mock_context(monkeypatch):
     import pyrealsense2 as rs
-    from tests.utils import build_software_device, MOCK_DEVICE, MOCK_SENSORS
+
+    from tests.utils import MOCK_DEVICE, MOCK_SENSORS, build_software_device
 
     ctx = rs.context()
     dev = build_software_device(MOCK_DEVICE, MOCK_SENSORS["profiles"], MOCK_SENSORS["options"])

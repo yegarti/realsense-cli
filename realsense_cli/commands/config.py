@@ -1,10 +1,10 @@
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
 from realsense_cli.driver import get_driver
-from realsense_cli.types import resolve_sensor_name
 from realsense_cli.printer import list_options, list_options_values
+from realsense_cli.types import resolve_sensor_name
 
 config_app = typer.Typer(help="Configure controls", no_args_is_help=True)
 
@@ -15,7 +15,8 @@ config_app = typer.Typer(help="Configure controls", no_args_is_help=True)
 )
 def config_list(
     sensor: Annotated[
-        str, typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False)
+        str,
+        typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False),
     ],
 ) -> None:
     driver = get_driver()
@@ -28,9 +29,10 @@ def config_list(
 )
 def config_get(
     sensor: Annotated[
-        str, typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False)
+        str,
+        typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False),
     ],
-    controls: Annotated[Optional[list[str]], typer.Argument(help="Controls to query")] = None,
+    controls: Annotated[list[str] | None, typer.Argument(help="Controls to query")] = None,
     all_controls: Annotated[
         bool, typer.Option("--all/", help="Query all supported controls")
     ] = False,
@@ -51,7 +53,8 @@ def config_get(
 @config_app.command(name="set", help="Set controls for given SENSOR")
 def config_set(
     sensor: Annotated[
-        str, typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False)
+        str,
+        typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False),
     ],
     controls_values: Annotated[
         list[str],
@@ -66,6 +69,6 @@ def config_set(
             controls[ctrl] = float(val)
         except ValueError:
             print(f"Failed to parse control value pair: {ctrl_val}")
-            raise typer.Abort()
+            raise typer.Abort() from None
     driver.set_control_values(resolve_sensor_name(sensor), controls)
     config_get(sensor, list(controls.keys()))
