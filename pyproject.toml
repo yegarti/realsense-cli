@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
     "typer>=0.27.3",
-    "pyrealsense2>=2.59.1",
+    "pyrealsense2>=2.56.5",
     "loguru>=0.7.3",
     "rosbags>=0.11.8",
 ]
