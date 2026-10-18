@@ -22,11 +22,20 @@ def camera() -> SoftwareCamera:
 
 
 @pytest.fixture
-def driver(camera, monkeypatch):
-    """Real driver over a simulated D435, also served to CLI commands by `get_driver()`."""
-    drv = Realsense(devices=[camera.device])
-    monkeypatch.setattr("realsense_cli.driver._driver", drv)
-    yield drv
+def make_driver(monkeypatch):
+    """Build the real driver over a software camera, also served to CLI commands."""
+
+    def make(camera: SoftwareCamera) -> Realsense:
+        drv = Realsense(devices=[camera.device])
+        monkeypatch.setattr("realsense_cli.driver._driver", drv)
+        return drv
+
+    return make
+
+
+@pytest.fixture
+def driver(camera, make_driver) -> Realsense:
+    return make_driver(camera)
 
 
 @pytest.fixture

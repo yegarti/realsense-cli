@@ -3,15 +3,10 @@ from typer.testing import CliRunner
 
 from realsense_cli.cli import app
 from realsense_cli.driver import get_driver
-from realsense_cli.driver.realsense import Realsense
-from realsense_cli.driver.software import D435, D435_SENSORS, SensorSpec, SoftwareCamera
+from realsense_cli.driver.software import D435, SensorSpec, SoftwareCamera, d435_sensor
 from realsense_cli.types import DeviceInfo, Option, Profile, Resolution
 
 runner = CliRunner()
-
-
-def _spec(sensor: str) -> SensorSpec:
-    return next(s for s in D435_SENSORS if s.name == sensor)
 
 
 def test_list(driver):
@@ -31,7 +26,7 @@ def test_config_list(driver, sensor_alias, sensor_name):
     result = runner.invoke(app, ["config", "list", sensor_alias])
     assert result.exit_code == 0
     stdout = result.stdout
-    for option in _spec(sensor_name).options:
+    for option in d435_sensor(sensor_name).options:
         assert option.name in stdout
         assert str(option.vtype(option.min_value)) in stdout
         assert str(option.vtype(option.max_value)) in stdout
@@ -48,7 +43,7 @@ def test_config_list(driver, sensor_alias, sensor_name):
 )
 def test_config_get(driver, sensor_alias, sensor_name, controls):
     result = runner.invoke(app, ["config", "get", sensor_alias, *controls])
-    defaults = {opt.name: opt.default_value for opt in _spec(sensor_name).options}
+    defaults = {opt.name: opt.default_value for opt in d435_sensor(sensor_name).options}
 
     assert result.exit_code == 0
     for control in controls:
@@ -117,7 +112,7 @@ def test_stream_list(driver, sensor_alias, sensor_name):
 
 
 @pytest.fixture
-def future_driver(monkeypatch):
+def future_driver(make_driver):
     """A device whose sensor and stream names the CLI has no aliases or mappings for."""
     info = DeviceInfo(
         name="Intel RealSense D999",
@@ -136,9 +131,7 @@ def future_driver(monkeypatch):
             )
         ],
     )
-    drv = Realsense(devices=[camera.device])
-    monkeypatch.setattr("realsense_cli.driver._driver", drv)
-    return drv
+    return make_driver(camera)
 
 
 def test_list_devices_unknown_sensor(future_driver):

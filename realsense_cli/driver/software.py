@@ -166,3 +166,7 @@ D435_SENSORS: list[SensorSpec] = [
 
 def d435() -> SoftwareCamera:
     return SoftwareCamera(D435, D435_SENSORS)
+
+
+def d435_sensor(name: str) -> SensorSpec:
+    return next(s for s in D435_SENSORS if s.name == name)

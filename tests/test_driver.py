@@ -1,9 +1,9 @@
 import pytest
 
 from realsense_cli.driver.realsense import Realsense
-from realsense_cli.driver.software import D435, D435_SENSORS
+from realsense_cli.driver.software import D435, d435_sensor
 
-STEREO = D435_SENSORS[0]
+STEREO = d435_sensor("Stereo Module")
 
 
 def test_query_devices_single_device(driver):
@@ -54,7 +54,7 @@ def test_list_streams(driver):
 
 
 def test_stream_motion(driver, camera):
-    driver.play([D435_SENSORS[2].profiles[0]], pipeline=False)
+    driver.play([d435_sensor("Motion Module").profiles[0]], pipeline=False)
     try:
         camera.push_frames()
         frameset = driver.wait_for_frameset()
