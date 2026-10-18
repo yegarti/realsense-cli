@@ -28,7 +28,11 @@ class SoftwareCamera:
     def __init__(self, info: DeviceInfo, sensors: list[SensorSpec]):
         self.info = info
         self.device = rs.software_device()
-        self.device.register_info(rs.camera_info.name, info.name)
+        # pyrealsense2 < 2.55 pre-registers a name, and registering again appends to it
+        if self.device.supports(rs.camera_info.name):
+            self.device.update_info(rs.camera_info.name, info.name)
+        else:
+            self.device.register_info(rs.camera_info.name, info.name)
         self.device.register_info(rs.camera_info.serial_number, info.serial)
         self.device.register_info(rs.camera_info.firmware_version, info.fw)
         self.device.register_info(rs.camera_info.usb_type_descriptor, info.connection)
