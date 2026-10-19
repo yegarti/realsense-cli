@@ -4,6 +4,7 @@ import typer
 from loguru import logger
 from rich.live import Live
 
+from realsense_cli.console import console, err_console
 from realsense_cli.driver import get_driver
 from realsense_cli.printer import list_profiles
 from realsense_cli.stream_view import StreamView
@@ -72,17 +73,10 @@ def stream_play(
         profiles = []
 
     view = StreamView([profile.stream for profile in profiles], metadata=metadata)
-    try:
-        driver.play(profiles, pipeline=api)
-    except RuntimeError as e:
-        print(str(e))
-        print("Requested profiles:")
-        for profile in profiles:
-            print(f"\t{profile}")
-        raise typer.Exit(1) from e
+    driver.play(profiles, pipeline=api)
 
     try:
-        with Live(view, refresh_per_second=30):
+        with Live(view, console=console, refresh_per_second=30):
             while True:
                 frameset = driver.wait_for_frameset()
                 if frameset is None:
@@ -90,5 +84,5 @@ def stream_play(
                     continue
                 view.update(frameset)
     finally:
-        print("Stopping all streams")
+        err_console.print("Stopping all streams")
         driver.stop()

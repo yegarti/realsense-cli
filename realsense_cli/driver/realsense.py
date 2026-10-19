@@ -4,6 +4,13 @@ from collections import defaultdict
 import pyrealsense2 as rs
 from loguru import logger
 
+from realsense_cli.errors import (
+    DeviceNotFound,
+    InvalidProfile,
+    InvalidValue,
+    UnknownControl,
+    UnknownSensor,
+)
 from realsense_cli.types import (
     DeviceInfo,
     Frame,
@@ -14,6 +21,8 @@ from realsense_cli.types import (
     Stream,
 )
 from realsense_cli.utils import find_origin_sensor
+
+_PROFILES_HINT = "Run `rs stream list` to see the supported profiles"
 
 
 class Realsense:
@@ -149,10 +158,8 @@ class Realsense:
         rs_sensor: rs.sensor = self._get_sensor(sensor)
         logger.info("querying controls {} for sensor {}", controls, rs_sensor)
         for control in controls:
-            option = getattr(rs.option, control, None)
+            option = self._get_option(rs_sensor, sensor, control)
             logger.debug('getting value for option: "{}"', option)
-            if not option or not rs_sensor.supports(option):
-                raise ValueError(f"control '{control}' is not supported for sensor '{sensor}'")
             res[control] = rs_sensor.get_option(option)
             logger.debug('"{}" value: {}', option, res[control])
         return res
@@ -165,12 +172,16 @@ class Realsense:
 
         logger.info("setting controls {} for sensor {}", control_values, rs_sensor)
         for control, value in control_values.items():
-            option = getattr(rs.option, control, None)
+            option = self._get_option(rs_sensor, sensor, control)
             logger.debug('setting "{}" with value {}', option, value)
-            if not option or not rs_sensor.supports(option):
-                logger.debug("no such option or not supported by sensor")
-                raise ValueError(f"control '{control}' is not supported for sensor '{sensor}'")
-            rs_sensor.set_option(option, value)
+            try:
+                rs_sensor.set_option(option, value)
+            except RuntimeError as e:
+                rng = rs_sensor.get_option_range(option)
+                raise InvalidValue(
+                    f"Failed to set '{control}' to {value}: {e}. "
+                    f"Valid range: {rng.min:g} to {rng.max:g}, step {rng.step:g}"
+                ) from e
 
     def list_streams(self, sensor: str) -> list[Profile]:
         """
@@ -225,6 +236,11 @@ class Realsense:
 
         stream_profiles: dict[str, list[Profile]] = {s: [] for s in origin_streams.values()}
         for profile in profiles:
+            if profile.stream not in origin_streams:
+                raise InvalidProfile(
+                    f"Unknown stream '{profile.stream}'. "
+                    f"Valid streams: {', '.join(origin_streams)}"
+                )
             stream_profiles[origin_streams[profile.stream]].append(profile)
 
         rs_stream_profiles: dict[str, list[rs.stream_profile]] = defaultdict(list)
@@ -235,19 +251,14 @@ class Realsense:
             for profile in sprofiles:
                 logger.debug(f"Looking a match for {profile}")
 
-                rs_stream_type = self._streams_map.get(profile.stream)
-                if rs_stream_type is None:
-                    raise RuntimeError(
-                        f"Unknown stream '{profile.stream}'. "
-                        "Cannot configure pyrealsense2 pipeline."
-                    )
+                rs_stream_type = self._get_rs_stream(profile.stream)
 
                 skip_index = profile.index == -1
                 skip_fps = profile.fps == 0
                 skip_width = profile.resolution.width == 0
                 skip_height = profile.resolution.height == 0
                 skip_format = profile.format == "any"
-                fmt = getattr(rs.format, profile.format.lower())
+                fmt = self._get_rs_format(profile.format)
 
                 logger.debug(
                     f"{skip_index=}, {skip_fps=}, {skip_format=}, {skip_height=}, {skip_width=}"
@@ -274,8 +285,8 @@ class Realsense:
                         rs_stream_profiles[sensor].append(sp)
                         break
                 else:
-                    raise RuntimeError(
-                        f"Failed to find streaming profile: '{profile}' for {sensor}"
+                    raise InvalidProfile(
+                        f"No profile on '{sensor}' matches '{profile}'. {_PROFILES_HINT}"
                     )
 
         for sensor, rs_profiles in rs_stream_profiles.items():
@@ -298,25 +309,24 @@ class Realsense:
         cfg.enable_device(self._device.get_info(rs.camera_info.serial_number))
         if profiles:
             for profile in profiles:
-                rs_stream = self._streams_map.get(profile.stream)
-                if rs_stream is None:
-                    raise RuntimeError(
-                        f"Unknown stream '{profile.stream}'. "
-                        "Cannot configure pyrealsense2 pipeline."
-                    )
-                rs_format = getattr(rs.format, profile.format.lower())
                 cfg.enable_stream(
-                    rs_stream,
+                    self._get_rs_stream(profile.stream),
                     profile.index,
                     profile.resolution.width,
                     profile.resolution.height,
-                    rs_format,
+                    self._get_rs_format(profile.format),
                     profile.fps,
                 )
         else:
             cfg.enable_all_streams()
         logger.info("Starting stream")
-        self._pipe_profile = self._pipeline.start(cfg, self._frame_queue)
+        try:
+            self._pipe_profile = self._pipeline.start(cfg, self._frame_queue)
+        except RuntimeError as e:
+            requested = ", ".join(str(p) for p in profiles or [])
+            raise InvalidProfile(
+                f"Failed to start profiles [{requested}]: {e}. {_PROFILES_HINT}"
+            ) from e
 
     def stop(self) -> None:
         """
@@ -387,16 +397,38 @@ class Realsense:
 
     def _get_sensor(self, sensor: str) -> rs.sensor:
         if sensor not in self._sensors[self._device]:
-            raise RuntimeError(
-                f'Sensor "{sensor}" is not supported on device: '
-                f"{self._device.get_info(rs.camera_info.serial_number)}"
-            )
+            raise UnknownSensor(sensor, self._sensors[self._device])
         return self._sensors[self._device][sensor]
+
+    @staticmethod
+    def _get_option(rs_sensor: rs.sensor, sensor: str, control: str) -> rs.option:
+        option = rs.option.__members__.get(control)
+        if option is None or not rs_sensor.supports(option):
+            supported = sorted(o.name for o in rs_sensor.get_supported_options())
+            raise UnknownControl(control, sensor, supported)
+        return option
+
+    def _get_rs_stream(self, stream: str) -> rs.stream:
+        rs_stream = self._streams_map.get(stream)
+        if rs_stream is None:
+            raise InvalidProfile(
+                f"Unknown stream '{stream}'. Valid streams: {', '.join(self._streams_map)}"
+            )
+        return rs_stream
+
+    @staticmethod
+    def _get_rs_format(fmt: str) -> rs.format:
+        rs_format = rs.format.__members__.get(fmt.lower())
+        if rs_format is None:
+            raise InvalidProfile(
+                f"Unknown format '{fmt}'. Valid formats: {', '.join(rs.format.__members__)}"
+            )
+        return rs_format
 
     @property
     def _device(self) -> rs.device:
         if self._active_device is None:
-            raise RuntimeError("No device is connected")
+            raise DeviceNotFound("No devices are connected")
         return self._active_device
 
     @property
@@ -416,4 +448,10 @@ class Realsense:
                 self._active_device = dev
                 break
         else:
-            raise ValueError(f"No device with serial {serial} is connected")
+            connected = ", ".join(
+                d.get_info(rs.camera_info.serial_number) for d in self._devices
+            )
+            raise DeviceNotFound(
+                f"No device with serial '{serial}' is connected. "
+                f"Connected devices: {connected or 'none'}"
+            )

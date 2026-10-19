@@ -2,6 +2,7 @@ import pytest
 
 from realsense_cli.driver.realsense import Realsense
 from realsense_cli.driver.software import D435, d435_sensor
+from realsense_cli.errors import UnknownControl
 
 STEREO = d435_sensor("Stereo Module")
 
@@ -41,7 +42,7 @@ def test_set_control_values(driver):
 
 
 def test_get_unsupported_control(driver):
-    with pytest.raises(ValueError, match="not supported"):
+    with pytest.raises(UnknownControl, match="not supported"):
         driver.get_control_values(STEREO.name, ["gain"])
 
 

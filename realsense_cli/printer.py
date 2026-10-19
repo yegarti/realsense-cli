@@ -2,14 +2,12 @@ from pathlib import Path
 from typing import Any
 
 from rich import box
-from rich.console import Console
 from rich.table import Table
 
+from realsense_cli.console import console
 from realsense_cli.rs_bag_parser import TopicInfo
 from realsense_cli.types import DeviceInfo, Option, Profile
 from realsense_cli.utils import group_profiles
-
-_console = Console(width=120)
 
 
 def list_devices(devices: list[DeviceInfo]) -> None:
@@ -24,7 +22,7 @@ def list_devices(devices: list[DeviceInfo]) -> None:
         sensors = "\n".join(dev.sensors)
         table.add_row(dev.name, dev.serial, dev.fw, dev.connection, sensors)
 
-    _console.print(table)
+    console.print(table)
 
 
 def list_options(
@@ -53,7 +51,7 @@ def list_options(
             opt.description,
         )
 
-    _console.print(table)
+    console.print(table)
 
 
 def list_options_values(options_values: dict[str, Any]):
@@ -64,7 +62,7 @@ def list_options_values(options_values: dict[str, Any]):
     for opt, value in options_values.items():
         table.add_row(opt, str(value))
 
-    _console.print(table)
+    console.print(table)
 
 
 def list_profiles(profiles: list[Profile], title: str = "Streams"):
@@ -83,7 +81,7 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
             profile.format,
         )
 
-    _console.print(table)
+    console.print(table)
 
 
 def list_bag_data(path: Path, duration: float, topics: list[TopicInfo]):
@@ -98,5 +96,5 @@ def list_bag_data(path: Path, duration: float, topics: list[TopicInfo]):
     table.add_column("Message Type")
     for info in topics:
         table.add_row(info.name, str(info.total_messages), info.msg_type)
-    _console.print(table)
-    Console().print(info_table)
+    console.print(table)
+    console.print(info_table)

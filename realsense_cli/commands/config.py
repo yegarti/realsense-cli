@@ -3,6 +3,7 @@ from typing import Annotated
 import typer
 
 from realsense_cli.driver import get_driver
+from realsense_cli.errors import InvalidValue
 from realsense_cli.printer import list_options, list_options_values
 from realsense_cli.types import resolve_sensor_name
 
@@ -40,8 +41,10 @@ def config_get(
     driver = get_driver()
     resolved = resolve_sensor_name(sensor)
     if not controls and not all_controls:
-        typer.echo("Specify control names or use --all to query all controls.", err=True)
-        raise typer.Exit(1)
+        raise typer.BadParameter(
+            "Specify control names or use --all to query all controls.",
+            param_hint="'CONTROLS...'",
+        )
     if not controls:
         controls = []
     if all_controls:
@@ -68,7 +71,8 @@ def config_set(
             ctrl, val = ctrl_val.split("=")
             controls[ctrl] = float(val)
         except ValueError:
-            print(f"Failed to parse control value pair: {ctrl_val}")
-            raise typer.Abort() from None
+            raise InvalidValue(
+                f"Failed to parse '{ctrl_val}', expected CONTROL=VALUE with a numeric VALUE"
+            ) from None
     driver.set_control_values(resolve_sensor_name(sensor), controls)
     config_get(sensor, list(controls.keys()))

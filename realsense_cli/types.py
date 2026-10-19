@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from loguru import logger
 
+from realsense_cli.errors import InvalidProfile
+
 if TYPE_CHECKING:
     import pyrealsense2 as rs
 
@@ -121,8 +123,12 @@ class Profile:
             fmt = parts[3] if len(parts) > 3 else "any"
             return cls(stream, res, fps, fmt)
         except Exception as e:
-            logger.error(e)
-            raise ValueError(f"Failed to parse profile: '{profile}'") from e
+            logger.debug(e)
+            # Not a ValueError: click would turn that into a generic "invalid value" message
+            raise InvalidProfile(
+                f"Failed to parse profile '{profile}'. Expected STREAM-RESOLUTION-FPS-FORMAT, "
+                f"e.g. depth-640x480-30-z16. Stream aliases: {', '.join(_STREAM_ALIASES)}"
+            ) from e
 
     @classmethod
     def from_rs(cls, profile: "rs.stream_profile") -> "Profile":

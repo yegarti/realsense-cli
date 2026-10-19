@@ -1,6 +1,8 @@
 import os
 from typing import TYPE_CHECKING, Optional
 
+from realsense_cli.errors import RsCliError
+
 if TYPE_CHECKING:
     from realsense_cli.driver.base import DriverProtocol
 
@@ -22,7 +24,7 @@ def get_driver() -> "DriverProtocol":
                 camera.start_frame_pump()
                 _driver = Realsense(devices=[camera.device])
             case t:
-                raise ValueError(f"Unknown driver: {t}")
+                raise RsCliError(f"Unknown RSCLI_DRIVER '{t}'. Valid drivers: realsense, mock")
     return _driver
 
 

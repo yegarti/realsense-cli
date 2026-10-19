@@ -16,6 +16,12 @@ def _reset_driver():
     reset_driver()
 
 
+@pytest.fixture(autouse=True)
+def _wide_console(monkeypatch):
+    """Rich falls back to 80 columns without a terminal, which truncates the tables."""
+    monkeypatch.setenv("COLUMNS", "120")
+
+
 @pytest.fixture
 def camera() -> SoftwareCamera:
     return d435()

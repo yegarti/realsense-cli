@@ -1,5 +1,6 @@
 import pytest
 
+from realsense_cli.errors import InvalidProfile
 from realsense_cli.types import Profile, Resolution
 from realsense_cli.utils import find_origin_sensor, group_profiles
 
@@ -35,7 +36,7 @@ def test_profile_from_string(profile, expected):
 
 
 def test_profile_from_string_error():
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidProfile):
         Profile.from_string("depth-30")
 
 

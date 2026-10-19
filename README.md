@@ -196,3 +196,19 @@ rs reset
 | `-s`, `--serial` | Select device by serial number |
 | `-v` | Verbose output (INFO); `-vv` for DEBUG |
 | `-h`, `--help` | Show help for any command |
+
+## Exit codes
+
+Errors print a one-line message to stderr. Unexpected errors show a traceback only with `-v`.
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Other or unexpected error |
+| `2` | Invalid command-line usage |
+| `3` | No device connected, or none matches `--serial` |
+| `4` | Unknown sensor |
+| `5` | Unknown control |
+| `6` | Invalid or unsupported stream profile |
+| `7` | Invalid control value |
+| `130` | Interrupted (Ctrl+C) |
