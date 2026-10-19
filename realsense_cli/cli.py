@@ -1,4 +1,6 @@
+import json
 import sys
+from dataclasses import asdict
 from typing import Annotated
 
 import typer
@@ -12,33 +14,54 @@ from realsense_cli.commands.config import config_app
 from realsense_cli.commands.stream import stream_app
 from realsense_cli.console import console, err_console
 from realsense_cli.errors import RsCliError
-from realsense_cli.printer import list_devices
-from realsense_cli.session import Session, get_driver, require_device
+from realsense_cli.printer import emit, list_devices
+from realsense_cli.session import Session, get_driver, json_output, require_device
 
 
 class RsCliGroup(TyperGroup):
     """
-    Root command group that reports errors as one line on stderr with a matching exit code.
-    Every subcommand runs inside its `invoke`.
+    Root command group that reports errors as one line on stderr with a matching exit code,
+    or as a JSON object under `--json`. Every subcommand runs inside its `invoke`.
     """
 
     def invoke(self, ctx):
+        as_json = bool(ctx.params.get("json_output"))
         try:
             return super().invoke(ctx)
-        except (TyperException, Abort, Exit):
+        except (Abort, Exit):
             raise
+        except TyperException as e:
+            # click's own errors, usage errors among them: click prints them unless --json.
+            # A group run with no arguments has already printed its help and has no message.
+            exit_code = getattr(e, "exit_code", 1)
+            if not as_json or not getattr(e, "format_message", lambda: "")():
+                raise
+            error_type = "UsageError" if exit_code == 2 else type(e).__name__
+            _print_json_error(error_type, e.format_message(), exit_code)
+            raise Exit(exit_code) from e
         except RsCliError as e:
-            _print_error(str(e))
+            if as_json:
+                _print_json_error(type(e).__name__, str(e), e.exit_code)
+            else:
+                _print_error(str(e))
             raise Exit(e.exit_code) from e
         except Exception as e:
             if ctx.params.get("verbose"):
                 raise
-            _print_error(f"{type(e).__name__}: {e} (run with --verbose for the traceback)")
+            if as_json:
+                _print_json_error(type(e).__name__, str(e), 1)
+            else:
+                _print_error(f"{type(e).__name__}: {e} (run with --verbose for the traceback)")
             raise Exit(1) from e
 
 
 def _print_error(message: str) -> None:
     err_console.print(f"[bold red]Error:[/] {escape(message)}", soft_wrap=True)
+
+
+def _print_json_error(error_type: str, message: str, exit_code: int) -> None:
+    error = {"type": error_type, "message": message, "exit_code": exit_code}
+    err_console.out(json.dumps({"error": error}), highlight=False)
 
 
 app = typer.Typer(
@@ -55,7 +78,7 @@ def rs_list(ctx: typer.Context) -> None:
     """
     driver = get_driver(ctx)
     devices = driver.query_devices()
-    list_devices(devices)
+    emit(ctx, {"devices": [asdict(d) for d in devices]}, lambda: list_devices(devices))
 
 
 app.add_typer(config_app, name="config")
@@ -72,8 +95,10 @@ def rs_reset(ctx: typer.Context) -> None:
     """
     driver = require_device(ctx)
     dev = driver.active_device
-    console.print(f"Performing hardware reset for device '{dev}'")
+    if not json_output(ctx):
+        console.print(f"Performing hardware reset for device '{dev}'")
     driver.reset()
+    emit(ctx, {"reset": dev}, lambda: None)
 
 
 @app.callback()
@@ -83,6 +108,9 @@ def callback(
     serial: Annotated[
         str, typer.Option("-s", "--serial", help="Act on device with this serial number")
     ] = "",
+    json_output: Annotated[
+        bool, typer.Option("--json", help="Print results as JSON, for scripts and agents")
+    ] = False,
 ):
     logger.remove()
     if verbose == 1:
@@ -91,4 +119,4 @@ def callback(
         logger.add(sys.stderr, level="DEBUG")
 
     logger.info("Logger verbosity: {}", verbose)
-    ctx.obj = Session(serial)
+    ctx.obj = Session(serial, json=json_output)

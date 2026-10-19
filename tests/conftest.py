@@ -1,9 +1,13 @@
 import random
+from dataclasses import replace
 
 import pytest
+from loguru import logger
+from rosbags.rosbag1 import Writer
+from rosbags.typesys import Stores, get_typestore
 
 from realsense_cli.driver.realsense import Realsense
-from realsense_cli.driver.software import SoftwareCamera, d435
+from realsense_cli.driver.software import D435, D435_SENSORS, SoftwareCamera, d435
 from realsense_cli.types import Frame, FrameSet, Profile
 
 
@@ -11,6 +15,13 @@ from realsense_cli.types import Frame, FrameSet, Profile
 def _wide_console(monkeypatch):
     """Rich falls back to 80 columns without a terminal, which truncates the tables."""
     monkeypatch.setenv("COLUMNS", "120")
+
+
+@pytest.fixture(autouse=True)
+def _drop_log_handlers():
+    """`-v` adds a handler on CliRunner's stderr, which is closed once the test ends."""
+    yield
+    logger.remove()
 
 
 @pytest.fixture
@@ -40,8 +51,27 @@ def make_driver(inject_driver):
 
 
 @pytest.fixture
+def two_cameras(inject_driver):
+    second = SoftwareCamera(replace(D435, serial="987654321"), D435_SENSORS)
+    return inject_driver(Realsense(devices=[d435().device, second.device]))
+
+
+@pytest.fixture
 def driver(camera, make_driver) -> Realsense:
     return make_driver(camera)
+
+
+@pytest.fixture
+def bag(tmp_path):
+    typestore = get_typestore(Stores.ROS1_NOETIC)
+    string = typestore.types["std_msgs/msg/String"]
+    path = tmp_path / "test.bag"
+    with Writer(path) as writer:
+        conn = writer.add_connection("/device_0/info", string.__msgtype__, typestore=typestore)
+        for t in (1, 3):
+            data = typestore.serialize_ros1(string(data="x"), string.__msgtype__)
+            writer.write(conn, t * 1_000_000_000, data)
+    return path
 
 
 @pytest.fixture

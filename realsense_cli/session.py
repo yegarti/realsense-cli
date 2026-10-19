@@ -13,8 +13,9 @@ class Session:
     that need no camera (`bag`, `--help`) never create an `rs.context`.
     """
 
-    def __init__(self, serial: str):
+    def __init__(self, serial: str, json: bool = False):
         self.serial = serial
+        self.json = json
         self._driver: DriverProtocol | None = None
 
     @property
@@ -47,6 +48,13 @@ def _session(ctx: typer.Context) -> Session:
     session = ctx.find_object(Session)
     assert session is not None, "the root callback sets ctx.obj"
     return session
+
+
+def json_output(ctx: typer.Context) -> bool:
+    """
+    Whether `--json` was given
+    """
+    return _session(ctx).json
 
 
 def get_driver(ctx: typer.Context) -> DriverProtocol:

@@ -1,9 +1,10 @@
+from dataclasses import asdict
 from typing import Annotated
 
 import typer
 
 from realsense_cli.errors import InvalidValue
-from realsense_cli.printer import list_options, list_options_values
+from realsense_cli.printer import emit, list_options, list_options_values
 from realsense_cli.session import require_device
 from realsense_cli.types import resolve_sensor_name
 
@@ -22,8 +23,13 @@ def config_list(
     ],
 ) -> None:
     driver = require_device(ctx)
-    controls = driver.list_controls(resolve_sensor_name(sensor))
-    list_options(controls)
+    resolved = resolve_sensor_name(sensor)
+    controls = driver.list_controls(resolved)
+    payload = {
+        "sensor": resolved,
+        "controls": [asdict(c) | {"vtype": c.vtype.__name__} for c in controls],
+    }
+    emit(ctx, payload, lambda: list_options(controls))
 
 
 @config_app.command(
@@ -51,8 +57,7 @@ def config_get(
         controls = []
     if all_controls:
         controls = [opt.name for opt in driver.list_controls(resolved)]
-    control_values = driver.get_control_values(resolved, controls)
-    list_options_values(control_values)
+    _emit_values(ctx, resolved, driver.get_control_values(resolved, controls))
 
 
 @config_app.command(name="set", help="Set controls for given SENSOR")
@@ -77,5 +82,10 @@ def config_set(
             raise InvalidValue(
                 f"Failed to parse '{ctrl_val}', expected CONTROL=VALUE with a numeric VALUE"
             ) from None
-    driver.set_control_values(resolve_sensor_name(sensor), controls)
-    config_get(ctx, sensor, list(controls.keys()))
+    resolved = resolve_sensor_name(sensor)
+    driver.set_control_values(resolved, controls)
+    _emit_values(ctx, resolved, driver.get_control_values(resolved, list(controls)))
+
+
+def _emit_values(ctx: typer.Context, sensor: str, values: dict[str, float]) -> None:
+    emit(ctx, {"sensor": sensor, "values": values}, lambda: list_options_values(values))

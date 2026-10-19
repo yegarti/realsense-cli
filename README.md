@@ -194,8 +194,36 @@ rs reset
 | Option | Description |
 |---|---|
 | `-s`, `--serial` | Select device by serial number |
+| `--json` | Print results as JSON (see [JSON output](#json-output)) |
 | `-v` | Verbose output (INFO); `-vv` for DEBUG |
 | `-h`, `--help` | Show help for any command |
+
+## JSON output
+
+`rs --json <command>` prints one JSON object on stdout instead of a table, for scripts and
+agents. Each command's result sits under a named key, so fields can be added without breaking
+parsers.
+
+| Command | Output |
+|---|---|
+| `rs list` | `{"devices": [{"name", "serial", "fw", "connection", "sensors": [...]}]}` |
+| `rs config list SENSOR` | `{"sensor", "controls": [{"name", "description", "min_value", "max_value", "step", "default_value", "vtype": "int" \| "float", "read_only"}]}` |
+| `rs config get` / `set` | `{"sensor", "values": {"<control>": <value>}}`; `set` returns the values read back from the device |
+| `rs stream list` | `{"profiles": [{"sensor", "stream", "width", "height", "fps", "format", "index"}]}` |
+| `rs bag info BAG` | `{"path", "duration", "topics": [{"name", "messages", "type"}]}` |
+| `rs reset` | `{"reset": "<serial>"}` |
+
+`rs stream play` runs until interrupted and rejects `--json` with exit code `2`.
+
+With `--json`, an error is a JSON object on the last line of stderr (warnings such as the
+multiple-devices notice may come before it), stdout stays empty, and the exit code is the same as
+without it (see below). Usage errors have `"type": "UsageError"`. Errors in the global options
+themselves (e.g. an unknown option before the command) are reported by click as plain text, and
+`-v` keeps showing the traceback for unexpected errors.
+
+```json
+{"error": {"type": "UnknownSensor", "message": "Unknown sensor 'bogus'. Valid sensors: ...", "exit_code": 4}}
+```
 
 ## Exit codes
 

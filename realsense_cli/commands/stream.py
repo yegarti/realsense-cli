@@ -5,8 +5,8 @@ from loguru import logger
 from rich.live import Live
 
 from realsense_cli.console import console, err_console
-from realsense_cli.printer import list_profiles
-from realsense_cli.session import require_device
+from realsense_cli.printer import emit, list_profiles
+from realsense_cli.session import json_output, require_device
 from realsense_cli.stream_view import StreamView
 from realsense_cli.types import _STREAM_ALIASES, Profile, resolve_sensor_name
 
@@ -29,10 +29,20 @@ def stream_list(
     else:
         rs_sensors = driver.sensors
 
-    profiles = []
-    for sensor in rs_sensors:
-        profiles.extend(driver.list_streams(sensor))
-    list_profiles(profiles)
+    sensor_profiles = [(s, p) for s in rs_sensors for p in driver.list_streams(s)]
+    payload = [
+        {
+            "sensor": sensor,
+            "stream": p.stream,
+            "width": p.resolution.width,
+            "height": p.resolution.height,
+            "fps": p.fps,
+            "format": p.format,
+            "index": p.index,
+        }
+        for sensor, p in sensor_profiles
+    ]
+    emit(ctx, {"profiles": payload}, lambda: list_profiles([p for _, p in sensor_profiles]))
 
 
 @stream_app.command(
@@ -69,6 +79,11 @@ def stream_play(
     ] = True,
     metadata: Annotated[bool, typer.Option("--md/--no-md", help="Show stream metadata")] = True,
 ):
+    if json_output(ctx):
+        raise typer.BadParameter(
+            "stream play runs until interrupted and has no JSON output yet",
+            param_hint="'--json'",
+        )
     driver = require_device(ctx)
     logger.debug(f"stream {profiles}")
     if not profiles:

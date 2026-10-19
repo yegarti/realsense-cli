@@ -1,13 +1,42 @@
+import json
+import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import typer
 from rich import box
 from rich.table import Table
 
 from realsense_cli.console import console
 from realsense_cli.rs_bag_parser import TopicInfo
+from realsense_cli.session import json_output
 from realsense_cli.types import DeviceInfo, Option, Profile, sensor_label
 from realsense_cli.utils import group_profiles
+
+
+def emit(ctx: typer.Context, payload: dict[str, Any], table: Callable[[], None]) -> None:
+    """
+    Print a command's result: PAYLOAD as JSON under `--json`, otherwise TABLE renders it
+    """
+    if json_output(ctx):
+        # Not `print`: Rich wraps long lines and highlights, which would corrupt the JSON
+        console.out(json.dumps(_finite(payload), indent=2, allow_nan=False), highlight=False)
+    else:
+        table()
+
+
+def _finite(value: Any) -> Any:
+    """
+    VALUE with NaN and infinite floats replaced by None: JSON has no token for them
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {k: _finite(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_finite(v) for v in value]
+    return value
 
 
 def list_devices(devices: list[DeviceInfo]) -> None:

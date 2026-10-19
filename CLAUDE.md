@@ -73,13 +73,13 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 
 All output goes through the shared consoles in `console.py`: `console` for command output (stdout), `err_console` for diagnostics (stderr). Bare `print` is a lint error (ruff `T20`).
 
-`printer.py` handles Rich table formatting for device/profile/control listings. `stream_view.py` renders the live stream display using Rich Live.
+Commands build their result as a plain dict and pass it to `printer.emit(ctx, payload, table=...)`, which prints it as JSON under the global `--json` flag (shapes documented in the README) and otherwise calls the table renderer. `printer.py` handles Rich table formatting for device/profile/control listings. `stream_view.py` renders the live stream display using Rich Live.
 
 `rs_bag_parser.py` uses `rosbags` (the rosbag1 `Reader`) to parse ROS1 bag files without a ROS installation.
 
 ### Errors
 
-Raise an `RsCliError` subclass from `errors.py` (`DeviceNotFound`, `UnknownSensor`, `UnknownControl`, `InvalidProfile`, `InvalidValue`) for anything the user can fix; messages list the valid values. `RsCliGroup` in `cli.py` turns them into a one-line stderr message and the class's `exit_code` (documented in the README). Other exceptions print one line too, with the traceback only under `--verbose`.
+Raise an `RsCliError` subclass from `errors.py` (`DeviceNotFound`, `UnknownSensor`, `UnknownControl`, `InvalidProfile`, `InvalidValue`) for anything the user can fix; messages list the valid values. `RsCliGroup` in `cli.py` turns them into a one-line stderr message (a JSON `{"error": ...}` object under `--json`, click usage errors included) and the class's `exit_code` (documented in the README). Other exceptions print one line too, with the traceback only under `--verbose`.
 
 ## Code style
 
