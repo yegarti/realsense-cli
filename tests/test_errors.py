@@ -76,8 +76,8 @@ def test_unknown_serial(driver):
     assert_error(result, DeviceNotFound, "000", D435.serial)
 
 
-def test_no_device(monkeypatch):
-    monkeypatch.setattr("realsense_cli.driver._driver", Realsense(devices=[]))
+def test_no_device(inject_driver):
+    inject_driver(Realsense(devices=[]))
     result = runner.invoke(app, ["config", "list", "depth"])
     assert_error(result, DeviceNotFound, "No devices")
 

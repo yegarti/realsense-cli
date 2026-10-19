@@ -2,7 +2,7 @@ import pytest
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
-from realsense_cli.driver import get_driver
+from realsense_cli.driver import create_driver
 from realsense_cli.driver.software import D435, SensorSpec, SoftwareCamera, d435_sensor
 from realsense_cli.errors import RsCliError
 from realsense_cli.types import DeviceInfo, Option, Profile, Resolution
@@ -201,7 +201,7 @@ def test_mock_driver_env_var(monkeypatch):
 
 def test_mock_driver_streams_on_its_own(monkeypatch):
     monkeypatch.setenv("RSCLI_DRIVER", "mock")
-    driver = get_driver()
+    driver = create_driver()
     driver.play([Profile("Depth", Resolution(640, 480), 30, "z16")])
     try:
         first = driver.wait_for_frameset()
@@ -215,4 +215,4 @@ def test_mock_driver_streams_on_its_own(monkeypatch):
 def test_unknown_driver_env_var(monkeypatch):
     monkeypatch.setenv("RSCLI_DRIVER", "bogus")
     with pytest.raises(RsCliError, match="bogus"):
-        get_driver()
+        create_driver()

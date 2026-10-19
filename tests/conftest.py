@@ -2,18 +2,9 @@ import random
 
 import pytest
 
-from realsense_cli.driver import reset_driver
 from realsense_cli.driver.realsense import Realsense
 from realsense_cli.driver.software import SoftwareCamera, d435
 from realsense_cli.types import Frame, FrameSet, Profile
-
-
-@pytest.fixture(autouse=True)
-def _reset_driver():
-    """Ensure each test gets a fresh driver instance."""
-    reset_driver()
-    yield
-    reset_driver()
 
 
 @pytest.fixture(autouse=True)
@@ -28,13 +19,22 @@ def camera() -> SoftwareCamera:
 
 
 @pytest.fixture
-def make_driver(monkeypatch):
+def inject_driver(monkeypatch):
+    """Serve DRIVER to CLI commands in place of the one `create_driver()` builds."""
+
+    def inject(driver: Realsense) -> Realsense:
+        monkeypatch.setattr("realsense_cli.session.create_driver", lambda: driver)
+        return driver
+
+    return inject
+
+
+@pytest.fixture
+def make_driver(inject_driver):
     """Build the real driver over a software camera, also served to CLI commands."""
 
     def make(camera: SoftwareCamera) -> Realsense:
-        drv = Realsense(devices=[camera.device])
-        monkeypatch.setattr("realsense_cli.driver._driver", drv)
-        return drv
+        return inject_driver(Realsense(devices=[camera.device]))
 
     return make
 

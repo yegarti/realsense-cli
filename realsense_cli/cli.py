@@ -11,9 +11,9 @@ from realsense_cli.commands.bag import bag_app
 from realsense_cli.commands.config import config_app
 from realsense_cli.commands.stream import stream_app
 from realsense_cli.console import console, err_console
-from realsense_cli.driver import get_driver
-from realsense_cli.errors import DeviceNotFound, RsCliError
+from realsense_cli.errors import RsCliError
 from realsense_cli.printer import list_devices
+from realsense_cli.session import Session, get_driver, require_device
 
 
 class RsCliGroup(TyperGroup):
@@ -49,11 +49,11 @@ app = typer.Typer(
 
 
 @app.command(name="list")
-def rs_list() -> None:
+def rs_list(ctx: typer.Context) -> None:
     """
     List connected devices with basic info
     """
-    driver = get_driver()
+    driver = get_driver(ctx)
     devices = driver.query_devices()
     list_devices(devices)
 
@@ -66,11 +66,11 @@ app.add_typer(bag_app, name="bag")
 
 
 @app.command(name="reset")
-def rs_reset() -> None:
+def rs_reset(ctx: typer.Context) -> None:
     """
     Send hardware reset command to device
     """
-    driver = get_driver()
+    driver = require_device(ctx)
     dev = driver.active_device
     console.print(f"Performing hardware reset for device '{dev}'")
     driver.reset()
@@ -91,19 +91,4 @@ def callback(
         logger.add(sys.stderr, level="DEBUG")
 
     logger.info("Logger verbosity: {}", verbose)
-
-    driver = get_driver()
-    logger.debug(f"setting '{serial}' as active device")
-    driver.active_device = serial
-
-    if ctx.invoked_subcommand not in ("list", "bag") and {"-h", "--help"}.isdisjoint(sys.argv):
-        logger.debug("checking device exist for subcommand '{}'", ctx.invoked_subcommand)
-        dev_n = len(driver.query_devices())
-        if dev_n == 0:
-            raise DeviceNotFound("No devices are connected")
-        if dev_n > 1 and not serial:
-            logger.warning("Multiple devices without serial!")
-            err_console.print(
-                "Multiple devices are connected but no serial provided, "
-                f"using device: '{driver.active_device}'"
-            )
+    ctx.obj = Session(serial)

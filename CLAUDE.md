@@ -38,14 +38,16 @@ CI (`.github/workflows/ci.yml`) runs `just check` on PRs and pushes to `main`. T
 
 ### Driver abstraction
 
-All hardware interaction goes through the driver interface in `driver/base.py`. `driver/__init__.py:get_driver()` returns the `Realsense` driver (`driver/realsense.py`), which wraps `pyrealsense2`.
+All hardware interaction goes through the driver interface in `driver/base.py`. `driver/__init__.py:create_driver()` builds the `Realsense` driver (`driver/realsense.py`), which wraps `pyrealsense2`.
+
+The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the driver on first use. Commands that need a camera take `ctx: typer.Context` and call `require_device(ctx)`, which raises `DeviceNotFound` when none is connected; `rs list` uses `get_driver(ctx)`. Commands that need no camera (`bag`, `--help`) never create an `rs.context`, and `pyrealsense2` is imported only inside `create_driver()`, never at CLI import time.
 
 `driver/software.py` simulates a D435 on `rs.software_device`, injected into the real driver with `Realsense(devices=[...])`. pyrealsense2 can't add a software device to an `rs.context`, so the pipeline can't see it, and `play()` on injected devices always streams through the sensor API. A software device only produces frames that are pushed to it.
 
 `typings/pyrealsense2/__init__.pyi` is a partial stub for the pyrealsense2 API this project uses (the package ships no type information). Add any newly used pyrealsense2 call to it, or `ty` fails.
 
 - `RSCLI_DRIVER=mock` runs the CLI against the simulated D435, with a background thread pushing frames (`start_frame_pump()`).
-- Tests get the same camera from the `driver` fixture in `tests/conftest.py` and push frames themselves with `camera.push_frames()`. No hardware is needed, and a connected camera is ignored.
+- Tests get the same camera from the `driver` fixture in `tests/conftest.py` and push frames themselves with `camera.push_frames()`. No hardware is needed, and a connected camera is ignored. `inject_driver` serves any driver to CLI commands by replacing `session.create_driver`.
 
 ### Commands
 

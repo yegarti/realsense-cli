@@ -5,8 +5,8 @@ from loguru import logger
 from rich.live import Live
 
 from realsense_cli.console import console, err_console
-from realsense_cli.driver import get_driver
 from realsense_cli.printer import list_profiles
+from realsense_cli.session import require_device
 from realsense_cli.stream_view import StreamView
 from realsense_cli.types import _STREAM_ALIASES, Profile, resolve_sensor_name
 
@@ -17,12 +17,13 @@ _STREAM_ALIASES_STR = ", ".join(_STREAM_ALIASES.keys())
 
 @stream_app.command(name="list", help="List supported streams for given SENSOR")
 def stream_list(
+    ctx: typer.Context,
     sensors: Annotated[
         list[str] | None,
         typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False),
     ] = None,
 ) -> None:
-    driver = get_driver()
+    driver = require_device(ctx)
     if sensors:
         rs_sensors = [resolve_sensor_name(s) for s in sensors]
     else:
@@ -54,6 +55,7 @@ def stream_list(
                     """,
 )
 def stream_play(
+    ctx: typer.Context,
     profiles: Annotated[
         list[Profile] | None,
         typer.Argument(help="Profiles to play", show_default=False, parser=Profile.from_string),
@@ -67,7 +69,7 @@ def stream_play(
     ] = True,
     metadata: Annotated[bool, typer.Option("--md/--no-md", help="Show stream metadata")] = True,
 ):
-    driver = get_driver()
+    driver = require_device(ctx)
     logger.debug(f"stream {profiles}")
     if not profiles:
         profiles = []
