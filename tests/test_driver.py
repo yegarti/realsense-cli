@@ -1,8 +1,8 @@
 import pytest
 
 from realsense_cli.driver.realsense import Realsense
-from realsense_cli.driver.software import D435, d435_sensor
-from realsense_cli.errors import UnknownControl
+from realsense_cli.driver.software import D435, SensorSpec, SoftwareCamera, d435_sensor
+from realsense_cli.errors import DeviceNotFound, InvalidProfile, InvalidValue, UnknownControl
 
 STEREO = d435_sensor("Stereo Module")
 
@@ -15,6 +15,14 @@ def test_query_devices_no_device():
     assert Realsense(devices=[]).query_devices() == []
 
 
+def test_no_device_raises_device_not_found():
+    driver = Realsense(devices=[])
+    with pytest.raises(DeviceNotFound):
+        _ = driver.sensors
+    with pytest.raises(DeviceNotFound):
+        driver.list_controls(STEREO.name)
+
+
 def test_list_controls(driver):
     result = {opt.name: opt for opt in driver.list_controls(STEREO.name)}
     for option in STEREO.options:
@@ -25,6 +33,18 @@ def test_list_controls(driver):
         assert opt_res.default_value == pytest.approx(option.default_value)
         assert opt_res.step == pytest.approx(option.step)
         assert opt_res.vtype is option.vtype
+
+
+def test_list_controls_includes_read_only(driver):
+    result = {opt.name: opt for opt in driver.list_controls(STEREO.name)}
+    assert result["asic_temperature"].read_only
+    assert result["asic_temperature"].default_value == pytest.approx(40.0)
+    assert not result["exposure"].read_only
+
+
+def test_set_read_only_control(driver):
+    with pytest.raises(InvalidValue, match="read-only"):
+        driver.set_control_values(STEREO.name, {"asic_temperature": 50})
 
 
 def test_get_control_values(driver):
@@ -85,3 +105,10 @@ def test_play_without_profiles_streams_defaults(driver, camera):
         assert driver.wait_for_frameset() is not None
     finally:
         driver.stop()
+
+
+def test_play_without_default_profiles_fails(make_driver):
+    camera = SoftwareCamera(D435, [SensorSpec(name=STEREO.name, profiles=[])])
+    driver = make_driver(camera)
+    with pytest.raises(InvalidProfile, match="no default profiles"):
+        driver.play(pipeline=False)

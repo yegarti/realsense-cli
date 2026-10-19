@@ -131,9 +131,6 @@ class Realsense:
         res = []
         for option in options:
             logger.debug("querying option: {}", option)
-            if rs_sensor.is_option_read_only(option):
-                logger.debug("skipping read only option")
-                continue
             rng: rs.option_range = rs_sensor.get_option_range(option)
             vtype = float
             if rng.step == int(rng.step) and rng.min == int(rng.min):
@@ -146,6 +143,7 @@ class Realsense:
                 step=round(rng.step, 6),
                 default_value=round(rng.default, 6),
                 vtype=vtype,
+                read_only=rs_sensor.is_option_read_only(option),
             )
             logger.debug("adding Option: {}", opt)
             res.append(opt)
@@ -174,6 +172,8 @@ class Realsense:
         logger.info("setting controls {} for sensor {}", control_values, rs_sensor)
         for control, value in control_values.items():
             option = self._get_option(rs_sensor, sensor, control)
+            if rs_sensor.is_option_read_only(option):
+                raise InvalidValue(f"Control '{control}' on '{sensor}' is read-only")
             logger.debug('setting "{}" with value {}', option, value)
             try:
                 rs_sensor.set_option(option, value)
@@ -289,6 +289,9 @@ class Realsense:
                     raise InvalidProfile(
                         f"No profile on '{sensor}' matches '{profile}'. {_PROFILES_HINT}"
                     )
+
+        if not rs_stream_profiles:
+            raise InvalidProfile(f"The device has no default profiles. {_PROFILES_HINT}")
 
         for sensor, rs_profiles in rs_stream_profiles.items():
             logger.info(f"Starting stream for {sensor} with {rs_profiles}")

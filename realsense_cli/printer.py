@@ -39,6 +39,7 @@ def list_options(
     table.add_column("Max Value")
     table.add_column("Step")
     table.add_column("Default Value")
+    table.add_column("Read Only")
     table.add_column("Description")
 
     for opt in options:
@@ -48,6 +49,7 @@ def list_options(
             str(opt.vtype(opt.max_value)),
             str(opt.vtype(opt.step)),
             str(opt.vtype(opt.default_value)),
+            "yes" if opt.read_only else "",
             opt.description,
         )
 

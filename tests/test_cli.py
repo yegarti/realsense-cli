@@ -79,6 +79,19 @@ def test_config_set(driver, sensor_alias, sensor_name, controls, vals):
     assert driver.get_control_values(sensor_name, controls) == expected
 
 
+def test_config_list_shows_read_only(driver):
+    result = runner.invoke(app, ["config", "list", "depth"])
+    assert result.exit_code == 0, result.output
+    line = next(line for line in result.stdout.splitlines() if "asic_temperature" in line)
+    assert "yes" in line
+
+
+def test_config_set_read_only(driver):
+    result = runner.invoke(app, ["config", "set", "depth", "asic_temperature=50"])
+    assert result.exit_code == 7
+    assert "read-only" in result.stderr
+
+
 def test_stream_play(driver, camera):
     profiles = [Profile("Depth", Resolution(640, 480), 30, "z16")]
     driver.play(profiles, pipeline=False)

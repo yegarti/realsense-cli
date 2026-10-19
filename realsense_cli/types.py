@@ -48,6 +48,7 @@ class Option:
     step: float
     default_value: float
     vtype: type[int] | type[float]
+    read_only: bool = False
 
 
 _SENSOR_ALIASES: dict[str, Sensor] = {
