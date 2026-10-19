@@ -1,7 +1,7 @@
 import time
 from collections import defaultdict
 
-import pyrealsense2 as rs  # type: ignore
+import pyrealsense2 as rs
 from loguru import logger
 
 from realsense_cli.types import (
@@ -11,6 +11,7 @@ from realsense_cli.types import (
     Option,
     Profile,
     Resolution,
+    Stream,
 )
 from realsense_cli.utils import find_origin_sensor
 
@@ -32,25 +33,24 @@ class Realsense:
         self._devices: list[rs.device] = []
         self._sensors: dict[rs.device, dict[str, rs.sensor]] = {}
         self._streams_map: dict[str, rs.stream] = {
-            "Depth": rs.stream.depth,
-            "Infrared 1": rs.stream.infrared,
-            "Infrared 2": rs.stream.infrared,
-            "Color": rs.stream.color,
-            "Gyro": rs.stream.gyro,
-            "Accel": rs.stream.accel,
+            Stream.DEPTH: rs.stream.depth,
+            Stream.INFRARED: rs.stream.infrared,
+            Stream.INFRARED2: rs.stream.infrared,
+            Stream.COLOR: rs.stream.color,
+            Stream.GYRO: rs.stream.gyro,
+            Stream.ACCEL: rs.stream.accel,
         }
         self._metadata: list[rs.frame_metadata_value] = []
         self._stream_method: str = "pipe"
 
         self._setup()
+        self._active_device: rs.device | None = None
         if self._devices:
             logger.debug("setting first device as active one")
             # sorting to be deterministic every run
             self._active_device = sorted(
                 [(d.get_info(rs.camera_info.serial_number), d) for d in self._devices]
             )[0][1]
-        else:
-            self._active_device = None
         logger.info("active device: {}", self._active_device)
         self._streaming = False
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
@@ -219,7 +219,7 @@ class Realsense:
         if not profiles:
             profiles = self._default_profiles()
         sensor_profiles = {}
-        for sensor in self._sensors[self._active_device]:
+        for sensor in self._sensors[self._device]:
             sensor_profiles[sensor] = self.list_streams(sensor)
         origin_streams: dict[str, str] = find_origin_sensor(sensor_profiles)
 
@@ -287,7 +287,7 @@ class Realsense:
     def _default_profiles(self) -> list[Profile]:
         return [
             Profile.from_rs(rs_profile)
-            for rs_sensor in self._sensors[self._active_device].values()
+            for rs_sensor in self._sensors[self._device].values()
             for rs_profile in rs_sensor.get_stream_profiles()
             if rs_profile.is_default()
         ]
@@ -295,7 +295,7 @@ class Realsense:
     def _stream_pipe(self, profiles):
         self._stream_method = "pipe"
         cfg = rs.config()
-        cfg.enable_device(self._active_device.get_info(rs.camera_info.serial_number))
+        cfg.enable_device(self._device.get_info(rs.camera_info.serial_number))
         if profiles:
             for profile in profiles:
                 rs_stream = self._streams_map.get(profile.stream)
@@ -326,7 +326,7 @@ class Realsense:
         if self._stream_method == "pipe":
             self._pipeline.stop()
         else:
-            for rs_sensor in self._sensors[self._active_device].values():
+            for rs_sensor in self._sensors[self._device].values():
                 if rs_sensor.get_active_streams():
                     rs_sensor.stop()
                     rs_sensor.close()
@@ -383,23 +383,29 @@ class Realsense:
         """
         Send hardware reset to device
         """
-        self._active_device.hardware_reset()
+        self._device.hardware_reset()
 
     def _get_sensor(self, sensor: str) -> rs.sensor:
-        if sensor not in self._sensors[self._active_device]:
+        if sensor not in self._sensors[self._device]:
             raise RuntimeError(
                 f'Sensor "{sensor}" is not supported on device: '
-                f"{self._active_device.get_info(rs.camera_info.serial_number)}"
+                f"{self._device.get_info(rs.camera_info.serial_number)}"
             )
-        return self._sensors[self._active_device][sensor]
+        return self._sensors[self._device][sensor]
+
+    @property
+    def _device(self) -> rs.device:
+        if self._active_device is None:
+            raise RuntimeError("No device is connected")
+        return self._active_device
 
     @property
     def sensors(self) -> list[str]:
-        return list(self._sensors[self._active_device].keys())
+        return list(self._sensors[self._device].keys())
 
     @property
     def active_device(self) -> str:
-        return self._active_device.get_info(rs.camera_info.serial_number)
+        return self._device.get_info(rs.camera_info.serial_number)
 
     @active_device.setter
     def active_device(self, serial: str | None = None):

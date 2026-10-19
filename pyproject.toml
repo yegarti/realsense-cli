@@ -44,7 +44,8 @@ select = ["E", "F", "I", "UP", "B"]
 addopts = "-s -ra -m 'not hardware'"
 markers = ["hardware: requires a physical RealSense device to be connected"]
 
-[tool.ty.src]
-# pyrealsense2 ships no type stubs
-exclude = ["realsense_cli/driver/realsense.py", "realsense_cli/driver/software.py"]
 
+
+[tool.ty.environment]
+# Partial pyrealsense2 stub; the package ships no type information
+extra-paths = ["typings"]

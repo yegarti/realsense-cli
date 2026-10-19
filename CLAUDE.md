@@ -42,6 +42,8 @@ All hardware interaction goes through the driver interface in `driver/base.py`. 
 
 `driver/software.py` simulates a D435 on `rs.software_device`, injected into the real driver with `Realsense(devices=[...])`. pyrealsense2 can't add a software device to an `rs.context`, so the pipeline can't see it, and `play()` on injected devices always streams through the sensor API. A software device only produces frames that are pushed to it.
 
+`typings/pyrealsense2/__init__.pyi` is a partial stub for the pyrealsense2 API this project uses (the package ships no type information). Add any newly used pyrealsense2 call to it, or `ty` fails.
+
 - `RSCLI_DRIVER=mock` runs the CLI against the simulated D435, with a background thread pushing frames (`start_frame_pump()`).
 - Tests get the same camera from the `driver` fixture in `tests/conftest.py` and push frames themselves with `camera.push_frames()`. No hardware is needed, and a connected camera is ignored.
 
@@ -58,10 +60,12 @@ All hardware interaction goes through the driver interface in `driver/base.py`. 
 ### Key types (`types.py`)
 
 - `DeviceInfo` — device metadata
-- `Sensor` enum — `STEREO_MODULE`, `RGB_CAMERA`, `MOTION_SENSOR`
-- `Stream` enum — `DEPTH`, `INFRARED`, `COLOR`, `GYRO`, `ACCEL`
-- `Profile` — `(stream, width, height, fps, format)`; CLI syntax: `depth-640x480-30-z16`
-- `Frame` / `FrameSet` — single frame and `Dict[Stream, Frame]`
+- `Sensor` `StrEnum` — known sensors: `STEREO_MODULE`, `RGB_CAMERA`, `MOTION_MODULE`
+- `Stream` `StrEnum` — known streams: `DEPTH`, `INFRARED`, `INFRARED2`, `COLOR`, `GYRO`, `ACCEL`
+- Fields holding a sensor or stream name from a device are typed `str`, not the enum: a new camera's unknown names pass through unchanged. Enum members compare equal to their plain string.
+- `Option` — a control's range, step and default as `float`, with `vtype` `int` or `float`
+- `Profile` — `(stream, resolution, fps, format, index)`; CLI syntax: `depth-640x480-30-z16`
+- `Frame` / `FrameSet` — single frame and `dict[str, Frame]` keyed by stream name
 
 ### Output
 

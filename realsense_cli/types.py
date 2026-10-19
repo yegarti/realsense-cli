@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NamedTuple
+from enum import StrEnum
+from typing import TYPE_CHECKING, NamedTuple
 
 from loguru import logger
 
 if TYPE_CHECKING:
-    pass
+    import pyrealsense2 as rs
 
 
 @dataclass
@@ -16,34 +17,50 @@ class DeviceInfo:
     sensors: list[str]
 
 
-Sensor = str  # sensor name as reported by pyrealsense2, e.g. "Stereo Module"
-Stream = str  # stream name as reported by pyrealsense2, e.g. "Depth"
+# Sensor and stream names are typed `str` wherever they come from a device: a new camera can
+# report a name these enums don't list, and it passes through unchanged. The enums name the
+# sensors and streams the CLI knows, and compare equal to the matching plain string.
+
+
+class Sensor(StrEnum):
+    STEREO_MODULE = "Stereo Module"
+    RGB_CAMERA = "RGB Camera"
+    MOTION_MODULE = "Motion Module"
+
+
+class Stream(StrEnum):
+    DEPTH = "Depth"
+    INFRARED = "Infrared 1"
+    INFRARED2 = "Infrared 2"
+    COLOR = "Color"
+    GYRO = "Gyro"
+    ACCEL = "Accel"
 
 
 @dataclass(frozen=True)
 class Option:
     name: str
     description: str
-    min_value: Any
-    max_value: Any
-    step: Any
-    default_value: Any
-    vtype: type
+    min_value: float
+    max_value: float
+    step: float
+    default_value: float
+    vtype: type[int] | type[float]
 
 
-_SENSOR_ALIASES: dict[str, str] = {
-    "depth": "Stereo Module",
-    "color": "RGB Camera",
-    "motion": "Motion Module",
+_SENSOR_ALIASES: dict[str, Sensor] = {
+    "depth": Sensor.STEREO_MODULE,
+    "color": Sensor.RGB_CAMERA,
+    "motion": Sensor.MOTION_MODULE,
 }
 
-_STREAM_ALIASES: dict[str, str] = {
-    "depth": "Depth",
-    "infrared": "Infrared 1",
-    "infrared2": "Infrared 2",
-    "color": "Color",
-    "gyro": "Gyro",
-    "accel": "Accel",
+_STREAM_ALIASES: dict[str, Stream] = {
+    "depth": Stream.DEPTH,
+    "infrared": Stream.INFRARED,
+    "infrared2": Stream.INFRARED2,
+    "color": Stream.COLOR,
+    "gyro": Stream.GYRO,
+    "accel": Stream.ACCEL,
 }
 
 
@@ -60,7 +77,7 @@ class Resolution(NamedTuple):
     height: int
 
     @classmethod
-    def from_string(cls, res: str):
+    def from_string(cls, res: str) -> "Resolution":
         try:
             width, height = [int(n) for n in res.split("x")]
         except Exception as e:
@@ -73,7 +90,7 @@ class Resolution(NamedTuple):
 
 @dataclass(frozen=True)
 class Profile:
-    stream: Stream
+    stream: str
     resolution: Resolution = Resolution(0, 0)
     fps: int = 0
     format: str = "any"
@@ -81,9 +98,9 @@ class Profile:
 
     def __post_init__(self):
         match self.stream:
-            case "Infrared 1":
+            case Stream.INFRARED:
                 index = 1
-            case "Infrared 2":
+            case Stream.INFRARED2:
                 index = 2
             case _:
                 index = -1
@@ -108,7 +125,7 @@ class Profile:
             raise ValueError(f"Failed to parse profile: '{profile}'") from e
 
     @classmethod
-    def from_rs(cls, profile: Any) -> "Profile":
+    def from_rs(cls, profile: "rs.stream_profile") -> "Profile":
 
         width, height = 0, 0
         if profile.is_video_stream_profile():
@@ -129,7 +146,7 @@ class Frame:
     profile: Profile
     timestamp: float
     index: int
-    metadata: dict[str, Any]
+    metadata: dict[str, int]
 
 
-FrameSet = dict[Stream, Frame]
+FrameSet = dict[str, Frame]  # keyed by stream name

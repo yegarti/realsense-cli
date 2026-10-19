@@ -1,13 +1,6 @@
-from realsense_cli.types import Profile
+from realsense_cli.types import Profile, Stream
 
-_stream_order: dict[str, int] = {
-    "Depth": 0,
-    "Infrared 1": 1,
-    "Infrared 2": 2,
-    "Color": 3,
-    "Gyro": 4,
-    "Accel": 5,
-}
+_stream_order: dict[str, int] = {stream: i for i, stream in enumerate(Stream)}
 
 
 def group_profiles(profiles: list[Profile]) -> dict[Profile, list[int]]:
