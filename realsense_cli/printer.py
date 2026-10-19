@@ -6,7 +6,7 @@ from rich.table import Table
 
 from realsense_cli.console import console
 from realsense_cli.rs_bag_parser import TopicInfo
-from realsense_cli.types import DeviceInfo, Option, Profile
+from realsense_cli.types import DeviceInfo, Option, Profile, sensor_label
 from realsense_cli.utils import group_profiles
 
 
@@ -19,7 +19,7 @@ def list_devices(devices: list[DeviceInfo]) -> None:
     table.add_column("Sensors", justify="center")
 
     for dev in devices:
-        sensors = "\n".join(dev.sensors)
+        sensors = "\n".join(map(sensor_label, dev.sensors))
         table.add_row(dev.name, dev.serial, dev.fw, dev.connection, sensors)
 
     console.print(table)

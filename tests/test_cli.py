@@ -16,6 +16,13 @@ def test_list(driver):
     assert D435.serial in result.stdout
     for sensor in D435.sensors:
         assert sensor in result.stdout
+    assert "Stereo Module (depth)" in result.stdout
+
+
+def test_list_unknown_sensor_has_no_alias(future_driver):
+    result = runner.invoke(app, ["list"])
+    assert "Future Sensor" in result.stdout
+    assert "Future Sensor (" not in result.stdout
 
 
 @pytest.mark.parametrize(

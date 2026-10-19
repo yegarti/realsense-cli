@@ -61,7 +61,14 @@ def test_config_set_unknown_control(driver):
 @pytest.mark.parametrize("command", [["config", "list"], ["stream", "list"]])
 def test_unknown_sensor(driver, command):
     result = runner.invoke(app, [*command, "bogus"])
-    assert_error(result, UnknownSensor, "bogus", *D435.sensors)
+    assert_error(
+        result,
+        UnknownSensor,
+        "bogus",
+        "Stereo Module (depth)",
+        "RGB Camera (color)",
+        "Motion Module (motion)",
+    )
 
 
 def test_unknown_serial(driver):

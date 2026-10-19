@@ -70,6 +70,14 @@ def resolve_sensor_name(name: str) -> str:
     return _SENSOR_ALIASES.get(name.lower(), name)
 
 
+def sensor_label(name: str) -> str:
+    """
+    NAME followed by its aliases, e.g. 'Stereo Module (depth)'
+    """
+    aliases = [alias for alias, sensor in _SENSOR_ALIASES.items() if sensor == name]
+    return f"{name} ({', '.join(aliases)})" if aliases else name
+
+
 def resolve_stream_name(name: str) -> str:
     return _STREAM_ALIASES.get(name.lower(), name)
 

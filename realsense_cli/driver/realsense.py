@@ -19,6 +19,7 @@ from realsense_cli.types import (
     Profile,
     Resolution,
     Stream,
+    sensor_label,
 )
 from realsense_cli.utils import find_origin_sensor
 
@@ -397,7 +398,7 @@ class Realsense:
 
     def _get_sensor(self, sensor: str) -> rs.sensor:
         if sensor not in self._sensors[self._device]:
-            raise UnknownSensor(sensor, self._sensors[self._device])
+            raise UnknownSensor(sensor, map(sensor_label, self._sensors[self._device]))
         return self._sensors[self._device][sensor]
 
     @staticmethod
