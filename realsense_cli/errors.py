@@ -43,3 +43,7 @@ class InvalidProfile(RsCliError):
 
 class InvalidValue(RsCliError):
     exit_code = 7
+
+
+class ConfirmationRequired(RsCliError):
+    exit_code = 8

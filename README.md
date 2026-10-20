@@ -184,8 +184,16 @@ Displays bag duration and per-topic message counts without requiring a full ROS 
 ### `rs reset` — hardware reset
 
 ```sh
-rs reset
+rs reset                    # reset the device
+rs reset --wait             # ...and wait until it is connected again (--timeout, default 30s)
+rs -s 123456789 reset       # pick a device when several are connected
+rs reset --yes              # several connected: reset the first one without asking
 ```
+
+With one device connected, or `--serial` given, `rs reset` resets right away. When several devices
+are connected and no `--serial` was given, it asks before resetting the first one, unless `--yes`
+is given. Without a terminal to ask on, or under `--json`, it fails with exit code `8` instead of
+asking. With `--wait`, a device that doesn't come back within `--timeout` fails with exit code `3`.
 
 ---
 
@@ -211,7 +219,7 @@ parsers.
 | `rs config get` / `set` | `{"sensor", "values": {"<control>": <value>}}`; `set` returns the values read back from the device |
 | `rs stream list` | `{"profiles": [{"sensor", "stream", "width", "height", "fps", "format", "index"}]}` |
 | `rs bag info BAG` | `{"path", "duration", "topics": [{"name", "messages", "type"}]}` |
-| `rs reset` | `{"reset": "<serial>"}` |
+| `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
 `rs stream play` runs until interrupted and rejects `--json` with exit code `2`.
 
@@ -234,9 +242,10 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `0` | Success |
 | `1` | Other or unexpected error |
 | `2` | Invalid command-line usage |
-| `3` | No device connected, or none matches `--serial` |
+| `3` | No device connected, none matches `--serial`, or a reset device didn't reconnect |
 | `4` | Unknown sensor |
 | `5` | Unknown control |
 | `6` | Invalid or unsupported stream profile |
 | `7` | Invalid control value |
+| `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
 | `130` | Interrupted (Ctrl+C) |

@@ -1,3 +1,6 @@
+import time
+from collections.abc import Callable
+
 from realsense_cli.types import Profile, Stream
 
 _stream_order: dict[str, int] = {stream: i for i, stream in enumerate(Stream)}
@@ -42,3 +45,21 @@ def find_origin_sensor(sensor_profiles: dict[str, list[Profile]]) -> dict[str, s
                 continue
             res[profile.stream] = sensor
     return res
+
+
+def wait_for_reconnect(
+    serial: str, connected: Callable[[], set[str]], timeout: float, poll: float = 0.2
+) -> bool:
+    """
+    Wait until device SERIAL drops off CONNECTED and comes back, as after a hardware reset.
+    Whether it came back within TIMEOUT seconds
+    """
+    deadline = time.monotonic() + timeout
+    dropped = False
+    while time.monotonic() < deadline:
+        present = serial in connected()
+        if dropped and present:
+            return True
+        dropped = dropped or not present
+        time.sleep(poll)
+    return False

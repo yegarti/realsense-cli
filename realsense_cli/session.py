@@ -1,3 +1,5 @@
+import sys
+
 import typer
 from loguru import logger
 
@@ -55,6 +57,25 @@ def json_output(ctx: typer.Context) -> bool:
     Whether `--json` was given
     """
     return _session(ctx).json
+
+
+def interactive(ctx: typer.Context) -> bool:
+    """
+    Whether the user can answer a prompt: stdin is a terminal and `--json` wasn't given
+    """
+    return not json_output(ctx) and _stdin_is_tty()
+
+
+def _stdin_is_tty() -> bool:
+    return sys.stdin.isatty()
+
+
+def device_is_ambiguous(ctx: typer.Context) -> bool:
+    """
+    Whether several devices are connected and `--serial` didn't pick one
+    """
+    session = _session(ctx)
+    return not session.serial and len(session.driver.query_devices()) > 1
 
 
 def get_driver(ctx: typer.Context) -> DriverProtocol:

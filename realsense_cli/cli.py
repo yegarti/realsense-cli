@@ -13,9 +13,16 @@ from realsense_cli.commands.bag import bag_app
 from realsense_cli.commands.config import config_app
 from realsense_cli.commands.stream import stream_app
 from realsense_cli.console import console, err_console
-from realsense_cli.errors import RsCliError
+from realsense_cli.errors import ConfirmationRequired, DeviceNotFound, RsCliError
 from realsense_cli.printer import emit, list_devices
-from realsense_cli.session import Session, get_driver, json_output, require_device
+from realsense_cli.session import (
+    Session,
+    device_is_ambiguous,
+    get_driver,
+    interactive,
+    json_output,
+    require_device,
+)
 
 
 class RsCliGroup(TyperGroup):
@@ -89,16 +96,45 @@ app.add_typer(bag_app, name="bag")
 
 
 @app.command(name="reset")
-def rs_reset(ctx: typer.Context) -> None:
+def rs_reset(
+    ctx: typer.Context,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Don't ask which device when several are connected"),
+    ] = False,
+    wait: Annotated[
+        bool, typer.Option("--wait", help="Wait until the device is connected again")
+    ] = False,
+    timeout: Annotated[
+        float, typer.Option("--timeout", help="Seconds --wait waits for the device")
+    ] = 30,
+) -> None:
     """
     Send hardware reset command to device
     """
     driver = require_device(ctx)
     dev = driver.active_device
+    if not yes and device_is_ambiguous(ctx):
+        if not interactive(ctx):
+            raise ConfirmationRequired(
+                f"Several devices are connected; pass --serial to pick one, "
+                f"or --yes to reset '{dev}'"
+            )
+        name = next(d.name for d in driver.query_devices() if d.serial == dev)
+        typer.confirm(f"Reset {name} ({dev})?", abort=True, err=True)
     if not json_output(ctx):
         console.print(f"Performing hardware reset for device '{dev}'")
     driver.reset()
-    emit(ctx, {"reset": dev}, lambda: None)
+    if not wait:
+        emit(ctx, {"reset": dev}, lambda: None)
+        return
+    if not driver.wait_for_reconnect(dev, timeout):
+        raise DeviceNotFound(f"Device '{dev}' did not reconnect within {timeout:g}s")
+    emit(
+        ctx,
+        {"reset": dev, "reconnected": True},
+        lambda: console.print(f"Device '{dev}' reconnected"),
+    )
 
 
 @app.callback()

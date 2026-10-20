@@ -24,3 +24,9 @@ def test_pipeline_streams_defaults(camera_driver):
         assert camera_driver.wait_for_frameset(timeout=5) is not None
     finally:
         camera_driver.stop()
+
+
+def test_reset_waits_for_reconnect(camera_driver):
+    serial = camera_driver.active_device
+    camera_driver.reset()
+    assert camera_driver.wait_for_reconnect(serial, timeout=45)

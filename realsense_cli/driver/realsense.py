@@ -21,7 +21,7 @@ from realsense_cli.types import (
     Stream,
     sensor_label,
 )
-from realsense_cli.utils import find_origin_sensor
+from realsense_cli.utils import find_origin_sensor, wait_for_reconnect
 
 _PROFILES_HINT = "Run `rs stream list` to see the supported profiles"
 
@@ -398,6 +398,20 @@ class Realsense:
         Send hardware reset to device
         """
         self._device.hardware_reset()
+
+    def wait_for_reconnect(self, serial: str, timeout: float) -> bool:
+        """
+        Wait for device SERIAL to drop off and come back, after `reset()`. The serial is
+        passed in because the reset device's handle may no longer answer
+        """
+
+        def connected() -> set[str]:
+            devices = (
+                self._ctx.devices if self._injected_devices is None else self._injected_devices
+            )
+            return {d.get_info(rs.camera_info.serial_number) for d in devices}
+
+        return wait_for_reconnect(serial, connected, timeout)
 
     def _get_sensor(self, sensor: str) -> rs.sensor:
         if sensor not in self._sensors[self._device]:
