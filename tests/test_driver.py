@@ -112,3 +112,9 @@ def test_play_without_default_profiles_fails(make_driver):
     driver = make_driver(camera)
     with pytest.raises(InvalidProfile, match="no default profiles"):
         driver.play(pipeline=False)
+
+
+def test_wait_for_reconnect_on_injected_device_returns_at_once(driver):
+    """A software device never drops off, so there is nothing to wait for."""
+    assert driver.wait_for_reconnect(D435.serial, timeout=60)
+    assert not driver.wait_for_reconnect("no-such-serial", timeout=60)

@@ -95,6 +95,9 @@ app.add_typer(stream_app, name="stream")
 app.add_typer(bag_app, name="bag")
 
 
+RESET_WAIT_TIMEOUT = 30
+
+
 @app.command(name="reset")
 def rs_reset(
     ctx: typer.Context,
@@ -106,18 +109,29 @@ def rs_reset(
         bool, typer.Option("--wait", help="Wait until the device is connected again")
     ] = False,
     timeout: Annotated[
-        float, typer.Option("--timeout", help="Seconds --wait waits for the device")
-    ] = 30,
+        float | None,
+        typer.Option(
+            "--timeout",
+            help=f"Seconds --wait waits for the device (default {RESET_WAIT_TIMEOUT})",
+            show_default=False,
+        ),
+    ] = None,
 ) -> None:
     """
     Send hardware reset command to device
     """
-    driver = require_device(ctx)
+    if timeout is not None and not wait:
+        raise typer.BadParameter("only applies with --wait", param_hint="'--timeout'")
+    if timeout is not None and timeout <= 0:
+        raise typer.BadParameter("must be more than 0 seconds", param_hint="'--timeout'")
+    # with --yes the usual notice says which device it picked; otherwise the prompt names it
+    driver = require_device(ctx, warn_ambiguous=yes)
     dev = driver.active_device
     if not yes and device_is_ambiguous(ctx):
         if not interactive(ctx):
+            serials = ", ".join(d.serial for d in driver.query_devices())
             raise ConfirmationRequired(
-                f"Several devices are connected; pass --serial to pick one, "
+                f"Several devices are connected ({serials}); pass --serial to pick one, "
                 f"or --yes to reset '{dev}'"
             )
         name = next(d.name for d in driver.query_devices() if d.serial == dev)
@@ -128,6 +142,7 @@ def rs_reset(
     if not wait:
         emit(ctx, {"reset": dev}, lambda: None)
         return
+    timeout = RESET_WAIT_TIMEOUT if timeout is None else timeout
     if not driver.wait_for_reconnect(dev, timeout):
         raise DeviceNotFound(f"Device '{dev}' did not reconnect within {timeout:g}s")
     emit(

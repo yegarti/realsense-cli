@@ -48,17 +48,22 @@ def find_origin_sensor(sensor_profiles: dict[str, list[Profile]]) -> dict[str, s
 
 
 def wait_for_reconnect(
-    serial: str, connected: Callable[[], set[str]], timeout: float, poll: float = 0.2
+    serial: str,
+    connected: Callable[[], set[str]],
+    timeout: float,
+    poll: float = 0.1,
+    drop_grace: float = 5,
 ) -> bool:
     """
     Wait until device SERIAL drops off CONNECTED and comes back, as after a hardware reset.
-    Whether it came back within TIMEOUT seconds
+    A device still listed after DROP_GRACE seconds counts as back too: its drop fell between
+    two polls. Whether it came back within TIMEOUT seconds
     """
-    deadline = time.monotonic() + timeout
+    start = time.monotonic()
     dropped = False
-    while time.monotonic() < deadline:
+    while (elapsed := time.monotonic() - start) < timeout:
         present = serial in connected()
-        if dropped and present:
+        if present and (dropped or elapsed >= drop_grace):
             return True
         dropped = dropped or not present
         time.sleep(poll)

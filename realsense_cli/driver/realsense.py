@@ -1,5 +1,6 @@
 import time
 from collections import defaultdict
+from collections.abc import Iterable
 
 import pyrealsense2 as rs
 from loguru import logger
@@ -71,11 +72,11 @@ class Realsense:
         self._query()
         self._prep_valid_md_attrs()
 
+    def _connected_devices(self) -> Iterable[rs.device]:
+        return self._ctx.devices if self._injected_devices is None else self._injected_devices
+
     def _query(self):
-        devices = (
-            self._ctx.devices if self._injected_devices is None else self._injected_devices
-        )
-        for dev in devices:
+        for dev in self._connected_devices():
             logger.debug("Adding device: {}", dev)
             self._devices.append(dev)
             self._sensors[dev] = {}
@@ -406,11 +407,11 @@ class Realsense:
         """
 
         def connected() -> set[str]:
-            devices = (
-                self._ctx.devices if self._injected_devices is None else self._injected_devices
-            )
-            return {d.get_info(rs.camera_info.serial_number) for d in devices}
+            return {d.get_info(rs.camera_info.serial_number) for d in self._connected_devices()}
 
+        if self._injected_devices is not None:
+            # injected devices never drop off, so there is nothing to wait for
+            return serial in connected()
         return wait_for_reconnect(serial, connected, timeout)
 
     def _get_sensor(self, sensor: str) -> rs.sensor:

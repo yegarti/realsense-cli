@@ -79,7 +79,7 @@ Commands build their result as a plain dict and pass it to `printer.emit(ctx, pa
 
 ### Errors
 
-Raise an `RsCliError` subclass from `errors.py` (`DeviceNotFound`, `UnknownSensor`, `UnknownControl`, `InvalidProfile`, `InvalidValue`) for anything the user can fix; messages list the valid values. `RsCliGroup` in `cli.py` turns them into a one-line stderr message (a JSON `{"error": ...}` object under `--json`, click usage errors included) and the class's `exit_code` (documented in the README). Other exceptions print one line too, with the traceback only under `--verbose`.
+Raise an `RsCliError` subclass from `errors.py` (`DeviceNotFound`, `UnknownSensor`, `UnknownControl`, `InvalidProfile`, `InvalidValue`, `ConfirmationRequired`) for anything the user can fix; messages list the valid values. `RsCliGroup` in `cli.py` turns them into a one-line stderr message (a JSON `{"error": ...}` object under `--json`, click usage errors included) and the class's `exit_code` (documented in the README). Other exceptions print one line too, with the traceback only under `--verbose`.
 
 ## Code style
 

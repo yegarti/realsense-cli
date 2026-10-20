@@ -193,7 +193,8 @@ rs reset --yes              # several connected: reset the first one without ask
 With one device connected, or `--serial` given, `rs reset` resets right away. When several devices
 are connected and no `--serial` was given, it asks before resetting the first one, unless `--yes`
 is given. Without a terminal to ask on, or under `--json`, it fails with exit code `8` instead of
-asking. With `--wait`, a device that doesn't come back within `--timeout` fails with exit code `3`.
+asking. With `--wait`, a device that doesn't come back within `--timeout` (only valid with `--wait`)
+fails with exit code `3`.
 
 ---
 

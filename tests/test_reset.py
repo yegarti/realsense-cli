@@ -110,3 +110,24 @@ def test_without_wait_doesnt_wait(reconnects):
     result = runner.invoke(app, ["--json", "reset"])
     assert json.loads(result.stdout) == {"reset": D435.serial}
     assert reconnects == []
+
+
+def test_confirmation_error_lists_connected_serials(resets):
+    result = runner.invoke(app, ["reset"])
+    assert D435.serial in result.stderr
+    assert "987654321" in result.stderr
+    assert "Multiple devices" not in result.stderr
+
+
+def test_yes_still_says_which_device_it_picked(resets):
+    result = runner.invoke(app, ["reset", "--yes"])
+    assert "Multiple devices are connected" in result.stderr
+
+
+@pytest.mark.parametrize("args", [["--timeout", "5"], ["--wait", "--timeout", "0"]])
+def test_bad_timeout_is_a_usage_error(driver, monkeypatch, args):
+    calls = []
+    monkeypatch.setattr(driver, "reset", lambda: calls.append(True))
+    result = runner.invoke(app, ["reset", *args])
+    assert result.exit_code == 2, result.output
+    assert calls == []

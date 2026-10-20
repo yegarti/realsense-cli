@@ -29,21 +29,27 @@ class Session:
             self._driver = driver
         return self._driver
 
-    def require_device(self) -> DriverProtocol:
+    def require_device(self, warn_ambiguous: bool = True) -> DriverProtocol:
         """
-        The driver, once at least one device is connected
+        The driver, once at least one device is connected. Says which device it picked when
+        the device is ambiguous, unless WARN_AMBIGUOUS is off
         """
         driver = self.driver
-        devices = driver.query_devices()
-        if not devices:
+        if not driver.query_devices():
             raise DeviceNotFound("No devices are connected")
-        if len(devices) > 1 and not self.serial:
+        if warn_ambiguous and self.device_is_ambiguous():
             logger.warning("Multiple devices without serial!")
             err_console.print(
                 "Multiple devices are connected but no serial provided, "
                 f"using device: '{driver.active_device}'"
             )
         return driver
+
+    def device_is_ambiguous(self) -> bool:
+        """
+        Whether several devices are connected and `--serial` didn't pick one
+        """
+        return not self.serial and len(self.driver.query_devices()) > 1
 
 
 def _session(ctx: typer.Context) -> Session:
@@ -74,8 +80,7 @@ def device_is_ambiguous(ctx: typer.Context) -> bool:
     """
     Whether several devices are connected and `--serial` didn't pick one
     """
-    session = _session(ctx)
-    return not session.serial and len(session.driver.query_devices()) > 1
+    return _session(ctx).device_is_ambiguous()
 
 
 def get_driver(ctx: typer.Context) -> DriverProtocol:
@@ -85,8 +90,8 @@ def get_driver(ctx: typer.Context) -> DriverProtocol:
     return _session(ctx).driver
 
 
-def require_device(ctx: typer.Context) -> DriverProtocol:
+def require_device(ctx: typer.Context, warn_ambiguous: bool = True) -> DriverProtocol:
     """
     The driver, for commands that need a device. Raises `DeviceNotFound` when none is connected
     """
-    return _session(ctx).require_device()
+    return _session(ctx).require_device(warn_ambiguous)

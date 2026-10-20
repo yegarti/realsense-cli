@@ -113,12 +113,18 @@ def test_wait_for_reconnect_after_device_drops_and_returns():
     assert wait_for_reconnect("1", connected, timeout=1, poll=0.001)
 
 
-def test_wait_for_reconnect_needs_the_device_to_drop_first():
-    """Right after a reset the device is often still listed; that isn't a reconnect."""
+def test_wait_for_reconnect_keeps_waiting_while_device_is_still_listed():
+    """Right after a reset the device is often still listed; that isn't a reconnect yet."""
     connected = _scripted({"1"})
-    assert not wait_for_reconnect("1", connected, timeout=0.05, poll=0.001)
+    assert not wait_for_reconnect("1", connected, timeout=0.05, poll=0.001, drop_grace=1)
+
+
+def test_wait_for_reconnect_accepts_a_device_that_never_seemed_to_drop():
+    """A drop and return between two polls is missed; a device still there later is back."""
+    connected = _scripted({"1"})
+    assert wait_for_reconnect("1", connected, timeout=1, poll=0.001, drop_grace=0.01)
 
 
 def test_wait_for_reconnect_times_out_when_device_stays_gone():
     connected = _scripted({"1"}, set())
-    assert not wait_for_reconnect("1", connected, timeout=0.05, poll=0.001)
+    assert not wait_for_reconnect("1", connected, timeout=0.05, poll=0.001, drop_grace=0.01)
