@@ -2,7 +2,7 @@ import pytest
 
 from realsense_cli.errors import InvalidProfile
 from realsense_cli.types import Profile, Resolution
-from realsense_cli.utils import find_origin_sensor, group_profiles, wait_for_reconnect
+from realsense_cli.utils import find_origin_sensor, group_profiles
 
 
 def test_group_profiles():
@@ -93,38 +93,3 @@ def test_find_origin_sensor_unknown():
 def test_profile_from_string_aliases(alias, expected_stream):
     p = Profile.from_string(alias)
     assert p.stream == expected_stream
-
-
-def _scripted(*states: set[str]):
-    """Connected serials per call, repeating the last state once the script runs out."""
-    calls = iter(states)
-    last = states[-1]
-
-    def connected() -> set[str]:
-        nonlocal last
-        last = next(calls, last)
-        return last
-
-    return connected
-
-
-def test_wait_for_reconnect_after_device_drops_and_returns():
-    connected = _scripted({"1", "2"}, {"2"}, {"2"}, {"1", "2"})
-    assert wait_for_reconnect("1", connected, timeout=1, poll=0.001)
-
-
-def test_wait_for_reconnect_keeps_waiting_while_device_is_still_listed():
-    """Right after a reset the device is often still listed; that isn't a reconnect yet."""
-    connected = _scripted({"1"})
-    assert not wait_for_reconnect("1", connected, timeout=0.05, poll=0.001, drop_grace=1)
-
-
-def test_wait_for_reconnect_accepts_a_device_that_never_seemed_to_drop():
-    """A drop and return between two polls is missed; a device still there later is back."""
-    connected = _scripted({"1"})
-    assert wait_for_reconnect("1", connected, timeout=1, poll=0.001, drop_grace=0.01)
-
-
-def test_wait_for_reconnect_times_out_when_device_stays_gone():
-    connected = _scripted({"1"}, set())
-    assert not wait_for_reconnect("1", connected, timeout=0.05, poll=0.001, drop_grace=0.01)

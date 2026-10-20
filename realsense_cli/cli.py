@@ -138,12 +138,12 @@ def rs_reset(
         typer.confirm(f"Reset {name} ({dev})?", abort=True, err=True)
     if not json_output(ctx):
         console.print(f"Performing hardware reset for device '{dev}'")
-    driver.reset()
     if not wait:
+        driver.reset()
         emit(ctx, {"reset": dev}, lambda: None)
         return
     timeout = RESET_WAIT_TIMEOUT if timeout is None else timeout
-    if not driver.wait_for_reconnect(dev, timeout):
+    if not driver.reset(timeout):
         raise DeviceNotFound(f"Device '{dev}' did not reconnect within {timeout:g}s")
     emit(
         ctx,

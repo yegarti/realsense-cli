@@ -116,7 +116,7 @@ def test_bag_info(bag):
 
 def test_reset(driver, monkeypatch):
     calls = []
-    monkeypatch.setattr(driver, "reset", lambda: calls.append(True))
+    monkeypatch.setattr(driver, "reset", lambda timeout=None: calls.append(True))
     assert invoke_json("reset") == {"reset": D435.serial}
     assert calls == [True]
 

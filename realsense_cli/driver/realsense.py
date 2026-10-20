@@ -1,10 +1,10 @@
 import time
 from collections import defaultdict
-from collections.abc import Iterable
 
 import pyrealsense2 as rs
 from loguru import logger
 
+from realsense_cli.driver.reconnect import ReconnectWatch, reset_and_wait
 from realsense_cli.errors import (
     DeviceNotFound,
     InvalidProfile,
@@ -22,7 +22,7 @@ from realsense_cli.types import (
     Stream,
     sensor_label,
 )
-from realsense_cli.utils import find_origin_sensor, wait_for_reconnect
+from realsense_cli.utils import find_origin_sensor
 
 _PROFILES_HINT = "Run `rs stream list` to see the supported profiles"
 
@@ -72,11 +72,11 @@ class Realsense:
         self._query()
         self._prep_valid_md_attrs()
 
-    def _connected_devices(self) -> Iterable[rs.device]:
-        return self._ctx.devices if self._injected_devices is None else self._injected_devices
-
     def _query(self):
-        for dev in self._connected_devices():
+        devices = (
+            self._ctx.devices if self._injected_devices is None else self._injected_devices
+        )
+        for dev in devices:
             logger.debug("Adding device: {}", dev)
             self._devices.append(dev)
             self._sensors[dev] = {}
@@ -394,25 +394,34 @@ class Realsense:
 
         return result
 
-    def reset(self):
+    def reset(self, timeout: float | None = None) -> bool:
         """
-        Send hardware reset to device
+        Send hardware reset to device. With TIMEOUT, wait up to TIMEOUT seconds for it to come
+        back and answer; whether it did
         """
-        self._device.hardware_reset()
+        serial = self.active_device
+        device = self._device
+        watch = ReconnectWatch(serial)
 
-    def wait_for_reconnect(self, serial: str, timeout: float) -> bool:
-        """
-        Wait for device SERIAL to drop off and come back, after `reset()`. The serial is
-        passed in because the reset device's handle may no longer answer
-        """
+        def on_change(info: rs.event_information) -> None:
+            if info.was_removed(device):
+                watch.on_removed(serial)
+            for new in info.get_new_devices():
+                watch.on_added(new.get_info(rs.camera_info.serial_number))
 
-        def connected() -> set[str]:
-            return {d.get_info(rs.camera_info.serial_number) for d in self._connected_devices()}
+        def ready() -> bool:
+            try:
+                for dev in rs.context().devices:
+                    if dev.get_info(rs.camera_info.serial_number) == serial:
+                        sensor = dev.sensors[0]
+                        sensor.get_option(sensor.get_supported_options()[0])
+                        return True
+            except RuntimeError as e:
+                logger.debug("device '{}' not ready yet: {}", serial, e)
+            return False
 
-        if self._injected_devices is not None:
-            # injected devices never drop off, so there is nothing to wait for
-            return serial in connected()
-        return wait_for_reconnect(serial, connected, timeout)
+        self._ctx.set_devices_changed_callback(on_change)
+        return reset_and_wait(watch, device.hardware_reset, ready, timeout)
 
     def _get_sensor(self, sensor: str) -> rs.sensor:
         if sensor not in self._sensors[self._device]:

@@ -13,7 +13,9 @@ runner = CliRunner()
 def resets(monkeypatch, two_cameras):
     """Serials the stubbed hardware reset was sent to; a software device can't reset."""
     calls = []
-    monkeypatch.setattr(two_cameras, "reset", lambda: calls.append(two_cameras.active_device))
+    monkeypatch.setattr(
+        two_cameras, "reset", lambda timeout=None: calls.append(two_cameras.active_device)
+    )
     return calls
 
 
@@ -71,7 +73,7 @@ def test_json_never_prompts_even_on_tty(resets, tty):
 
 def test_single_device_on_tty_resets_without_prompt(driver, monkeypatch, tty):
     calls = []
-    monkeypatch.setattr(driver, "reset", lambda: calls.append(True))
+    monkeypatch.setattr(driver, "reset", lambda timeout=None: calls.append(True))
     result = runner.invoke(app, ["reset"])
     assert result.exit_code == 0, result.output
     assert "?" not in result.stderr
@@ -80,27 +82,21 @@ def test_single_device_on_tty_resets_without_prompt(driver, monkeypatch, tty):
 
 @pytest.fixture
 def reconnects(monkeypatch, driver):
-    """Stub the hardware reset, and record each wait's timeout; the device comes back."""
-    waits = []
-    monkeypatch.setattr(driver, "reset", lambda: None)
-    monkeypatch.setattr(
-        driver,
-        "wait_for_reconnect",
-        lambda serial, timeout: waits.append((serial, timeout)) or True,
-    )
-    return waits
+    """Stub the hardware reset, recording each timeout; the device always comes back."""
+    timeouts = []
+    monkeypatch.setattr(driver, "reset", lambda timeout=None: timeouts.append(timeout) or True)
+    return timeouts
 
 
 def test_wait_reports_reconnect(reconnects):
     result = runner.invoke(app, ["--json", "reset", "--wait", "--timeout", "5"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout) == {"reset": D435.serial, "reconnected": True}
-    assert reconnects == [(D435.serial, 5)]
+    assert reconnects == [5]
 
 
 def test_wait_timeout_fails(driver, monkeypatch):
-    monkeypatch.setattr(driver, "reset", lambda: None)
-    monkeypatch.setattr(driver, "wait_for_reconnect", lambda serial, timeout: False)
+    monkeypatch.setattr(driver, "reset", lambda timeout=None: False)
     result = runner.invoke(app, ["reset", "--wait"])
     assert result.exit_code == 3, result.output
     assert D435.serial in result.stderr
@@ -109,7 +105,7 @@ def test_wait_timeout_fails(driver, monkeypatch):
 def test_without_wait_doesnt_wait(reconnects):
     result = runner.invoke(app, ["--json", "reset"])
     assert json.loads(result.stdout) == {"reset": D435.serial}
-    assert reconnects == []
+    assert reconnects == [None]
 
 
 def test_confirmation_error_lists_connected_serials(resets):
@@ -127,7 +123,7 @@ def test_yes_still_says_which_device_it_picked(resets):
 @pytest.mark.parametrize("args", [["--timeout", "5"], ["--wait", "--timeout", "0"]])
 def test_bad_timeout_is_a_usage_error(driver, monkeypatch, args):
     calls = []
-    monkeypatch.setattr(driver, "reset", lambda: calls.append(True))
+    monkeypatch.setattr(driver, "reset", lambda timeout=None: calls.append(True))
     result = runner.invoke(app, ["reset", *args])
     assert result.exit_code == 2, result.output
     assert calls == []
