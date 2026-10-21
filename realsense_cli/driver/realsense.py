@@ -1,5 +1,7 @@
+import struct
 import time
 from collections import defaultdict
+from itertools import permutations
 
 import pyrealsense2 as rs
 from loguru import logger
@@ -13,22 +15,55 @@ from realsense_cli.errors import (
     UnknownSensor,
 )
 from realsense_cli.types import (
+    Calibration,
     DeviceInfo,
+    Extrinsics,
     Frame,
     FrameSet,
+    Intrinsics,
     Option,
     Profile,
     Resolution,
     Stream,
+    StreamIntrinsics,
     sensor_label,
 )
-from realsense_cli.utils import find_origin_sensor
+from realsense_cli.utils import find_origin_sensor, stream_rank
 
 _PROFILES_HINT = "Run `rs stream list` to see the supported profiles"
+
+# The SDK's camera info fields, with the connection type (USB, GMSL, DDS) moved up to the USB
+# type it qualifies
+_CAMERA_INFO_ORDER = [name for name in rs.camera_info.__members__ if name != "connection_type"]
+_CAMERA_INFO_ORDER.insert(_CAMERA_INFO_ORDER.index("usb_type_descriptor"), "connection_type")
 
 # Frames waiting for `wait_for_frameset`. Sensors deliver into one queue, which drops frames
 # once full: a capacity of 1 starves every sensor but the last to deliver
 _FRAME_QUEUE_CAPACITY = 32
+
+
+def _float32(value: float) -> float:
+    """
+    VALUE, a float32 the SDK widened to a Python float, as the shortest decimal that reads
+    back as the same float32: 0.001 comes back from the SDK as 0.0010000000474974513
+    """
+    # a float32 round-trips through 9 significant digits, and often fewer
+    for digits in range(1, 9):
+        shorter = float(f"{value:.{digits}g}")
+        if struct.unpack("f", struct.pack("f", shorter))[0] == value:
+            return shorter
+    return float(f"{value:.9g}")
+
+
+def _intrinsics(rs_intrinsics: rs.intrinsics) -> Intrinsics:
+    return Intrinsics(
+        ppx=_float32(rs_intrinsics.ppx),
+        ppy=_float32(rs_intrinsics.ppy),
+        fx=_float32(rs_intrinsics.fx),
+        fy=_float32(rs_intrinsics.fy),
+        model=rs_intrinsics.model.name,
+        coeffs=tuple(map(_float32, rs_intrinsics.coeffs)),
+    )
 
 
 class Realsense:
@@ -124,6 +159,23 @@ class Realsense:
             logger.debug("adding device info: {}", info)
             devices.append(info)
         return devices
+
+    def camera_info(self) -> dict[str, str]:
+        """
+        Every camera info field the active device supports, keyed by its `rs.camera_info` name.
+        A field the device reports as 'unknown' says nothing, e.g. the IMU type of a D415,
+        which has no IMU, and is left out
+        """
+        info = {}
+        # by `__members__` key: `rs.camera_info.name` is a member, so members have no `.name`
+        for name in _CAMERA_INFO_ORDER:
+            rs_info = rs.camera_info.__members__[name]
+            if not self._device.supports(rs_info):
+                continue
+            value = self._device.get_info(rs_info)
+            if value.lower() != "unknown":
+                info[name] = value
+        return info
 
     def list_controls(self, sensor: str) -> list[Option]:
         """
@@ -259,39 +311,10 @@ class Realsense:
 
             for profile in sprofiles:
                 logger.debug(f"Looking a match for {profile}")
-
-                rs_stream_type = self._get_rs_stream(profile.stream)
-
-                skip_index = profile.index == -1
-                skip_fps = profile.fps == 0
-                skip_width = profile.resolution.width == 0
-                skip_height = profile.resolution.height == 0
-                skip_format = profile.format == "any"
-                fmt = self._get_rs_format(profile.format)
-
-                logger.debug(
-                    f"{skip_index=}, {skip_fps=}, {skip_format=}, {skip_height=}, {skip_width=}"
-                )
-
                 for rs_profile in rs_profiles:
-                    if rs_profile.is_video_stream_profile():
-                        sp: rs.video_stream_profile = rs_profile.as_video_stream_profile()
-                        width, height = sp.width(), sp.height()
-                    else:
-                        sp = rs_profile
-                        width, height = 0, 0
-
-                    logger.debug(f"checking {rs_profile}...")
-                    if (
-                        sp.stream_type() == rs_stream_type
-                        and (skip_index or (sp.stream_index() == profile.index))
-                        and (skip_format or (sp.format() == fmt))
-                        and (skip_fps or (sp.fps() == profile.fps))
-                        and (skip_width or (width == profile.resolution.width))
-                        and (skip_height or (height == profile.resolution.height))
-                    ):
-                        logger.debug(f"Found match: {sp}")
-                        rs_stream_profiles[sensor].append(sp)
+                    if self._matches(rs_profile, profile):
+                        logger.debug(f"Found match: {rs_profile}")
+                        rs_stream_profiles[sensor].append(rs_profile)
                         break
                 else:
                     raise InvalidProfile(
@@ -307,6 +330,27 @@ class Realsense:
             rs_sensor.open(rs_profiles)
             rs_sensor.start(self._frame_queue)
         return [Profile.from_rs(sp) for sps in rs_stream_profiles.values() for sp in sps]
+
+    def _matches(self, rs_profile: rs.stream_profile, profile: Profile) -> bool:
+        """
+        Whether RS_PROFILE is PROFILE, whose unset parts (index -1, fps 0, width or height 0,
+        format 'any') match anything
+        """
+        width, height = 0, 0
+        if rs_profile.is_video_stream_profile():
+            vsp = rs_profile.as_video_stream_profile()
+            width, height = vsp.width(), vsp.height()
+        return (
+            rs_profile.stream_type() == self._get_rs_stream(profile.stream)
+            and profile.index in (-1, rs_profile.stream_index())
+            and (
+                profile.format == "any"
+                or rs_profile.format() == self._get_rs_format(profile.format)
+            )
+            and profile.fps in (0, rs_profile.fps())
+            and profile.resolution.width in (0, width)
+            and profile.resolution.height in (0, height)
+        )
 
     def _default_profiles(self) -> list[Profile]:
         return [
@@ -341,6 +385,85 @@ class Realsense:
                 f"Failed to start profiles [{requested}]: {e}. {_PROFILES_HINT}"
             ) from e
         return [Profile.from_rs(sp) for sp in self._pipe_profile.get_streams()]
+
+    def calibration(self, profiles: list[Profile] | None = None) -> Calibration:
+        """
+        Intrinsics of the video profiles matching PROFILES (every video profile when None), and
+        the extrinsics between their streams in both directions
+        """
+        rs_profiles = [
+            rs_profile
+            for rs_sensor in self._sensors[self._device].values()
+            for rs_profile in rs_sensor.get_stream_profiles()
+            if rs_profile.is_video_stream_profile()
+        ]
+        # known streams first, in the order the CLI lists them; a stable sort keeps the
+        # device's own order within a stream
+        rs_profiles.sort(key=lambda rs_profile: stream_rank(rs_profile.stream_name()))
+
+        if profiles is not None:
+            for profile in profiles:
+                if not any(self._matches(p, profile) for p in rs_profiles):
+                    streams = ", ".join(dict.fromkeys(p.stream_name() for p in rs_profiles))
+                    raise InvalidProfile(
+                        f"No video profile matches '{profile}'. Video streams: {streams}. "
+                        f"{_PROFILES_HINT}"
+                    )
+            rs_profiles = [
+                rs_profile
+                for rs_profile in rs_profiles
+                if any(self._matches(rs_profile, profile) for profile in profiles)
+            ]
+
+        groups: dict[tuple, list[rs.video_stream_profile]] = defaultdict(list)
+        for rs_profile in rs_profiles:
+            vsp = rs_profile.as_video_stream_profile()
+            try:
+                intr = _intrinsics(vsp.get_intrinsics())
+            except RuntimeError:
+                # the SDK has none for some profiles, e.g. the unrectified infrared Y16 ones
+                intr = None
+            key = (
+                vsp.stream_name(),
+                vsp.stream_index(),
+                Resolution(vsp.width(), vsp.height()),
+                intr,
+            )
+            groups[key].append(vsp)
+        intrinsics = [
+            StreamIntrinsics(
+                stream=stream,
+                index=index,
+                resolution=resolution,
+                formats=tuple(dict.fromkeys(p.format().name.upper() for p in group)),
+                fps=tuple(sorted({p.fps() for p in group})),
+                intrinsics=intr,
+            )
+            for (stream, index, resolution, intr), group in groups.items()
+        ]
+
+        # a device keeps extrinsics per stream, so any one profile stands for its stream
+        streams: dict[str, rs.stream_profile] = {}
+        for rs_profile in rs_profiles:
+            streams.setdefault(rs_profile.stream_name(), rs_profile)
+        extrinsics = []
+        for (source, source_profile), (target, target_profile) in permutations(
+            streams.items(), 2
+        ):
+            try:
+                rs_extrinsics = source_profile.get_extrinsics_to(target_profile)
+            except RuntimeError as e:
+                logger.debug("no extrinsics from {} to {}: {}", source, target, e)
+                continue
+            extrinsics.append(
+                Extrinsics(
+                    source=source,
+                    target=target,
+                    rotation=tuple(map(_float32, rs_extrinsics.rotation)),
+                    translation=tuple(map(_float32, rs_extrinsics.translation)),
+                )
+            )
+        return Calibration(intrinsics, extrinsics)
 
     def stop(self) -> None:
         """

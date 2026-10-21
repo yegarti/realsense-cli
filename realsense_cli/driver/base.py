@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from realsense_cli.types import DeviceInfo, FrameSet, Option, Profile
+from realsense_cli.types import Calibration, DeviceInfo, FrameSet, Option, Profile
 
 
 class DriverProtocol(Protocol):
@@ -15,6 +15,8 @@ class DriverProtocol(Protocol):
 
     def query_devices(self) -> list[DeviceInfo]: ...
 
+    def camera_info(self) -> dict[str, str]: ...
+
     def list_controls(self, sensor: str) -> list[Option]: ...
 
     def get_control_values(self, sensor: str, controls: list[str]) -> dict[str, float]: ...
@@ -26,6 +28,8 @@ class DriverProtocol(Protocol):
     def play(
         self, profiles: list[Profile] | None = None, pipeline: bool = True
     ) -> list[Profile]: ...
+
+    def calibration(self, profiles: list[Profile] | None = None) -> Calibration: ...
 
     def stop(self) -> None: ...
 

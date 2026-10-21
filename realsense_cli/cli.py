@@ -11,6 +11,7 @@ from typer.exceptions import Abort, Exit, TyperException
 
 from realsense_cli.commands.bag import bag_app
 from realsense_cli.commands.config import config_app
+from realsense_cli.commands.info import rs_info
 from realsense_cli.commands.stream import stream_app
 from realsense_cli.console import console, err_console
 from realsense_cli.errors import ConfirmationRequired, DeviceNotFound, RsCliError
@@ -87,6 +88,8 @@ def rs_list(ctx: typer.Context) -> None:
     devices = driver.query_devices()
     emit(ctx, {"devices": [asdict(d) for d in devices]}, lambda: list_devices(devices))
 
+
+app.command(name="info")(rs_info)
 
 app.add_typer(config_app, name="config")
 

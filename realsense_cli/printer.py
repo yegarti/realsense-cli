@@ -1,6 +1,8 @@
 import json
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from decimal import Decimal
+from itertools import groupby
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +13,15 @@ from rich.table import Table
 from realsense_cli.console import console
 from realsense_cli.rs_bag_parser import TopicInfo
 from realsense_cli.session import json_output
-from realsense_cli.types import DeviceInfo, Option, Profile, sensor_label
+from realsense_cli.types import (
+    Calibration,
+    DeviceInfo,
+    Option,
+    Profile,
+    Resolution,
+    StreamIntrinsics,
+    sensor_label,
+)
 from realsense_cli.utils import group_profiles
 
 
@@ -52,6 +62,122 @@ def list_devices(devices: list[DeviceInfo]) -> None:
         table.add_row(dev.name, dev.serial, dev.fw, dev.connection, sensors)
 
     console.print(table)
+
+
+def device_details(
+    camera_info: dict[str, str], sensors: list[str], calibration: Calibration | None = None
+) -> None:
+    table = Table(title="Device", box=box.SIMPLE, show_header=False)
+    table.add_column()
+    table.add_column()
+    for name, value in camera_info.items():
+        table.add_row(name.replace("_", " ").title(), value)
+    table.add_row("Sensors", "\n".join(map(sensor_label, sensors)))
+    console.print(table)
+    if calibration is None:
+        return
+
+    list_intrinsics(calibration.intrinsics)
+    list_distortion(calibration.intrinsics)
+
+    if not calibration.extrinsics:
+        return
+    table = Table(title="Extrinsics", box=box.SIMPLE)
+    table.add_column("From")
+    table.add_column("To")
+    table.add_column("Rotation")
+    table.add_column("Translation (m)")
+    for ext in calibration.extrinsics:
+        table.add_row(
+            ext.source,
+            ext.target,
+            # column-major: row i holds every third value from i
+            _matrix([ext.rotation[row::3] for row in range(3)]),
+            _matrix([[t] for t in ext.translation]),
+        )
+    console.print(table)
+
+
+def _matrix(rows: list[tuple[float, ...]] | list[list[float]]) -> Table:
+    grid = Table.grid(padding=(0, 1))
+    for _ in rows[0]:
+        grid.add_column(justify="right")
+    for row in rows:
+        grid.add_row(*map(_number, row))
+    return grid
+
+
+def list_intrinsics(intrinsics: list[StreamIntrinsics]) -> None:
+    """
+    A row per stream and resolution, the stream named on its first row only. Distortion is
+    left to `list_distortion`: it rarely changes with the resolution
+    """
+    table = Table(title="Intrinsics", box=box.SIMPLE)
+    table.add_column("Stream")
+    table.add_column("Resolution")
+    for attribute in ("ppx", "ppy", "fx", "fy"):
+        table.add_column(attribute, justify="right")
+    # last: a long list of formats wraps without pushing the numbers apart
+    table.add_column("Formats")
+    for stream, groups in groupby(intrinsics, key=lambda group: group.stream):
+        groups = list(groups)
+        for i, group in enumerate(groups):
+            intr = group.intrinsics
+            values = (
+                ["n/a"] * 4
+                if intr is None
+                else [_number(value) for value in (intr.ppx, intr.ppy, intr.fx, intr.fy)]
+            )
+            table.add_row(
+                stream if i == 0 else "",
+                str(group.resolution),
+                *values,
+                ", ".join(group.formats),
+                end_section=i == len(groups) - 1,
+            )
+    console.print(table)
+
+
+def list_distortion(intrinsics: list[StreamIntrinsics]) -> None:
+    """
+    A row per stream and distortion, listing its resolutions only when a stream has several
+    """
+    resolutions: dict[tuple[str, str, tuple[float, ...]], list[Resolution]] = {}
+    for group in intrinsics:
+        if group.intrinsics is not None:
+            key = (group.stream, group.intrinsics.model, group.intrinsics.coeffs)
+            resolutions.setdefault(key, []).append(group.resolution)
+    if not resolutions:
+        return
+    streams = [stream for stream, _, _ in resolutions]
+    by_resolution = len(streams) > len(set(streams))
+
+    table = Table(title="Distortion", box=box.SIMPLE)
+    table.add_column("Stream")
+    if by_resolution:
+        table.add_column("Resolutions")
+    table.add_column("Model")
+    table.add_column("Coefficients")
+    for (stream, model, coeffs), stream_resolutions in resolutions.items():
+        cells = [stream, model, _numbers(coeffs)]
+        if by_resolution:
+            cells.insert(1, "/".join(map(str, stream_resolutions)))
+        table.add_row(*cells)
+    console.print(table)
+
+
+def _numbers(values: Iterable[float]) -> str:
+    return ", ".join(map(_number, values))
+
+
+def _number(value: float) -> str:
+    """
+    VALUE with every digit it holds, without an exponent: `:g` keeps only 6 digits and
+    prints 0.0000907 as 9.07e-05
+    """
+    if value == 0:
+        return "0"
+    return format(Decimal(repr(value)), "f").removesuffix(".0")
 
 
 def list_options(
