@@ -198,9 +198,9 @@ rs stream play depth-640x480-30 color-0x0-15
 
 Hide metadata with `--no-md`. Switch to the low-level sensor API with `--sensor`.
 
-**Bounded run** — a smoke check that frames arrive. `--frames N` stops after N framesets (with
-`--sensor` each frame arrives on its own and counts as one), `--duration S` after S seconds;
-given both, whichever comes first. The run then prints the frames received per stream:
+**Bounded run** — a smoke check that frames arrive. `--frames N` stops once every stream received
+N frames, `--duration S` after S seconds; given both, whichever comes first. The run then prints
+the frames received per stream:
 ```sh
 rs stream play depth color --frames 100
 rs --json stream play --duration 5
@@ -209,13 +209,14 @@ rs --json stream play --duration 5
  Frames received
   Stream   Frames
  ────────────────
-  Depth        50
-  Color        50
+  Depth       100
+  Color       100
 ```
 
-A requested stream that received no frames fails the run with exit code `9`, as does a bounded
-run in which no frameset arrives for 3 seconds. Without profiles, only a run that received no
-frames at all fails.
+The streams checked are the ones the device started, so without profiles every default stream
+counts. A stream that received no frames fails the run with exit code `9`, as does a stream that
+sends nothing for 3 seconds before it has its N frames (or, with `--duration`, before the time
+is up).
 
 ---
 
@@ -301,5 +302,5 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `6` | Invalid or unsupported stream profile |
 | `7` | Invalid control value, or a control that failed to write during `rs config restore` |
 | `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
-| `9` | A bounded `rs stream play` received no frames from a requested stream, or frames stopped arriving |
+| `9` | A stream in a bounded `rs stream play` received no frames, or stopped sending them for 3 seconds |
 | `130` | Interrupted (Ctrl+C) |

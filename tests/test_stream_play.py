@@ -49,7 +49,8 @@ def test_duration_bound_stops_on_its_own(feed):
     assert depth["frames"] > 0
 
 
-def test_requested_stream_without_frames_fails(feed):
+def test_requested_stream_without_frames_fails(feed, monkeypatch):
+    monkeypatch.setattr("realsense_cli.commands.stream.FRAME_TIMEOUT", 0.1)
     feed.streams = ["Depth"]
     result = runner.invoke(app, ["--json", "stream", "play", "depth", "color", "--frames", "4"])
     assert result.exit_code == NoFrames.exit_code, result.output
@@ -102,3 +103,30 @@ def test_non_positive_bound_is_usage_error(driver, bound):
     result = runner.invoke(app, ["stream", "play", *bound])
     assert result.exit_code == 2, result.output
     assert bound[0] in result.stderr
+
+
+def test_default_stream_without_frames_fails(feed, monkeypatch):
+    monkeypatch.setattr("realsense_cli.commands.stream.FRAME_TIMEOUT", 0.1)
+    feed.streams = ["Depth", "Infrared 1", "Infrared 2", "Color", "Gyro"]
+    result = runner.invoke(app, ["stream", "play", "--frames", "2"])
+    assert result.exit_code == NoFrames.exit_code, result.output
+    assert "Accel" in result.stderr
+
+
+def test_frames_bound_counts_per_stream(feed):
+    result = runner.invoke(app, ["--json", "stream", "play", "depth", "color", "--frames", "3"])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["streams"] == [
+        {"stream": "Depth", "frames": 3},
+        {"stream": "Color", "frames": 3},
+    ]
+
+
+def test_silent_stream_fails_duration_run_early(feed, monkeypatch):
+    monkeypatch.setattr("realsense_cli.commands.stream.FRAME_TIMEOUT", 0.1)
+    feed.streams = ["Depth"]
+    started = time.monotonic()
+    result = runner.invoke(app, ["stream", "play", "depth", "color", "--duration", "5"])
+    assert result.exit_code == NoFrames.exit_code, result.output
+    assert "Color" in result.stderr
+    assert time.monotonic() - started < 1

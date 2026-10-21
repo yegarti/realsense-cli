@@ -16,7 +16,7 @@ from realsense_cli.types import _STREAM_ALIASES, Profile, resolve_sensor_name
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
 
-# Seconds a bounded run waits for the next frameset before failing
+# Seconds a bounded run waits for a stream's next frame before failing
 FRAME_TIMEOUT = 3.0
 
 _STREAM_ALIASES_STR = ", ".join(_STREAM_ALIASES.keys())
@@ -70,8 +70,8 @@ def stream_list(
                     \n
                     Stream aliases: {_STREAM_ALIASES_STR}\n
                     Runs until Ctrl-C, or with --frames/--duration stops on its own and
-                    prints the frames received per stream. A requested stream that
-                    received no frames fails the run.\n
+                    prints the frames received per stream. A stream that sends no
+                    frames for 3 seconds fails the run.\n
                     """,
 )
 def stream_play(
@@ -93,7 +93,7 @@ def stream_play(
         typer.Option(
             "--frames",
             min=1,
-            help="Stop after N framesets (with --sensor, each frame counts as one)",
+            help="Stop once every stream received N frames",
             show_default=False,
         ),
     ] = None,
@@ -115,9 +115,9 @@ def stream_play(
     if not profiles:
         profiles = []
 
-    requested = [profile.stream for profile in profiles]
-    view = StreamView(requested, metadata=metadata)
-    driver.play(profiles, pipeline=api)
+    # the streams the device started, defaults included: frames are reported under these names
+    started = [profile.stream for profile in driver.play(profiles, pipeline=api)]
+    view = StreamView(started, metadata=metadata)
 
     # the live view would corrupt the JSON on stdout
     live = (
@@ -134,13 +134,11 @@ def stream_play(
                         logger.warning("Frames didn't arrive until timeout")
                         continue
                     view.update(frameset)
-            counts = _count_frames(driver, view, requested, frames, duration)
+            counts = _count_frames(driver, view, started, frames, duration)
     finally:
         err_console.print("Stopping all streams")
         driver.stop()
 
-    if not counts:
-        raise NoFrames("No frames arrived")
     missing = [stream for stream, n in counts.items() if n == 0]
     if missing:
         raise NoFrames(
@@ -163,27 +161,37 @@ def _count_frames(
     duration: float | None,
 ) -> dict[str, int]:
     """
-    Frames received per stream until FRAMES framesets arrived or DURATION seconds passed.
-    STREAMS start at 0, so a requested stream that got nothing still shows up
+    Frames received per stream until each of STREAMS received FRAMES frames or DURATION
+    seconds passed. STREAMS start at 0, so a stream that got nothing still shows up. A stream
+    still short of FRAMES that sends nothing for FRAME_TIMEOUT seconds fails the run
     """
     counts = dict.fromkeys(streams, 0)
-    deadline = None if duration is None else time.monotonic() + duration
-    framesets = 0
-    while frames is None or framesets < frames:
-        timeout = FRAME_TIMEOUT
+    started = time.monotonic()
+    last_frame = dict.fromkeys(streams, started)
+    deadline = None if duration is None else started + duration
+    while True:
+        now = time.monotonic()
+        if deadline is not None and now >= deadline:
+            break
+        waiting = [s for s in streams if frames is None or counts[s] < frames]
+        if not waiting:
+            break
+        stalled = [s for s in waiting if now - last_frame[s] >= FRAME_TIMEOUT]
+        if stalled:
+            raise NoFrames(
+                f"No frames arrived from {', '.join(stalled)} within {FRAME_TIMEOUT:g}s. "
+                f"{_received_summary(counts)}"
+            )
+        # wake up in time to notice the first stall, or the deadline
+        timeout = min(last_frame[s] for s in waiting) + FRAME_TIMEOUT - now
         if deadline is not None:
-            timeout = min(timeout, deadline - time.monotonic())
-            if timeout <= 0:
-                break
+            timeout = min(timeout, deadline - now)
         frameset = driver.wait_for_frameset(timeout)
         if frameset is None:
-            if timeout < FRAME_TIMEOUT:
-                break  # the deadline cut the wait short: the run is over, not stalled
-            raise NoFrames(
-                f"No frames arrived within {FRAME_TIMEOUT:g}s. {_received_summary(counts)}"
-            )
-        framesets += 1
+            continue
+        now = time.monotonic()
         for stream in frameset:
             counts[stream] = counts.get(stream, 0) + 1
+            last_frame[stream] = now
         view.update(frameset)
     return counts

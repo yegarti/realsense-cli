@@ -217,21 +217,24 @@ class Realsense:
             logger.debug("adding profile {}", res[-1])
         return res
 
-    def play(self, profiles: list[Profile] | None = None, pipeline: bool = True) -> None:
+    def play(
+        self, profiles: list[Profile] | None = None, pipeline: bool = True
+    ) -> list[Profile]:
         """
-        Start streaming selected profiles
+        Start streaming selected profiles; the profiles the device actually started
         """
         logger.info("Playing profiles: {}", profiles)
         if pipeline and self._injected_devices is not None:
             logger.info("pipeline cannot see injected devices, streaming with sensor API")
             pipeline = False
         if pipeline:
-            self._stream_pipe(profiles)
+            started = self._stream_pipe(profiles)
         else:
-            self._stream_sensor(profiles)
+            started = self._stream_sensor(profiles)
         self._streaming = True
+        return started
 
-    def _stream_sensor(self, profiles: list[Profile] | None):
+    def _stream_sensor(self, profiles: list[Profile] | None) -> list[Profile]:
         self._stream_method = "sensor"
         if not profiles:
             profiles = self._default_profiles()
@@ -303,6 +306,7 @@ class Realsense:
             rs_sensor = self._get_sensor(sensor)
             rs_sensor.open(rs_profiles)
             rs_sensor.start(self._frame_queue)
+        return [Profile.from_rs(sp) for sps in rs_stream_profiles.values() for sp in sps]
 
     def _default_profiles(self) -> list[Profile]:
         return [
@@ -312,7 +316,7 @@ class Realsense:
             if rs_profile.is_default()
         ]
 
-    def _stream_pipe(self, profiles):
+    def _stream_pipe(self, profiles) -> list[Profile]:
         self._stream_method = "pipe"
         cfg = rs.config()
         cfg.enable_device(self._device.get_info(rs.camera_info.serial_number))
@@ -336,6 +340,7 @@ class Realsense:
             raise InvalidProfile(
                 f"Failed to start profiles [{requested}]: {e}. {_PROFILES_HINT}"
             ) from e
+        return [Profile.from_rs(sp) for sp in self._pipe_profile.get_streams()]
 
     def stop(self) -> None:
         """

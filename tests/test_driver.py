@@ -107,13 +107,14 @@ def test_wait_for_frameset_times_out(driver):
 
 
 def test_play_without_profiles_streams_defaults(driver, camera):
-    driver.play()
+    started = driver.play()
     try:
         active = {
             (p.stream_name(), p.fps())
             for sensor in camera.device.sensors
             for p in sensor.get_active_streams()
         }
+        assert {(p.stream, p.fps) for p in started} == active
         assert active == {
             ("Depth", 30),
             ("Infrared 1", 30),
