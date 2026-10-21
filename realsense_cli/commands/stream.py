@@ -115,7 +115,8 @@ def stream_play(
     if not profiles:
         profiles = []
 
-    view = StreamView([profile.stream for profile in profiles], metadata=metadata)
+    requested = [profile.stream for profile in profiles]
+    view = StreamView(requested, metadata=metadata)
     driver.play(profiles, pipeline=api)
 
     # the live view would corrupt the JSON on stdout
@@ -133,7 +134,6 @@ def stream_play(
                         logger.warning("Frames didn't arrive until timeout")
                         continue
                     view.update(frameset)
-            requested = [profile.stream for profile in profiles]
             counts = _count_frames(driver, view, requested, frames, duration)
     finally:
         err_console.print("Stopping all streams")
@@ -143,12 +143,14 @@ def stream_play(
         raise NoFrames("No frames arrived")
     missing = [stream for stream, n in counts.items() if n == 0]
     if missing:
-        raise NoFrames(f"No frames arrived from {', '.join(missing)}. {_received(counts)}")
+        raise NoFrames(
+            f"No frames arrived from {', '.join(missing)}. {_received_summary(counts)}"
+        )
     payload = {"streams": [{"stream": s, "frames": n} for s, n in counts.items()]}
     emit(ctx, payload, lambda: list_frame_counts(counts))
 
 
-def _received(counts: dict[str, int]) -> str:
+def _received_summary(counts: dict[str, int]) -> str:
     received = ", ".join(f"{stream} {n}" for stream, n in counts.items()) or "none"
     return f"Frames received: {received}"
 
@@ -177,7 +179,9 @@ def _count_frames(
         if frameset is None:
             if timeout < FRAME_TIMEOUT:
                 break  # the deadline cut the wait short: the run is over, not stalled
-            raise NoFrames(f"No frames arrived within {FRAME_TIMEOUT:g}s. {_received(counts)}")
+            raise NoFrames(
+                f"No frames arrived within {FRAME_TIMEOUT:g}s. {_received_summary(counts)}"
+            )
         framesets += 1
         for stream in frameset:
             counts[stream] = counts.get(stream, 0) + 1

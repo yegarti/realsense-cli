@@ -10,19 +10,24 @@ from realsense_cli.errors import NoFrames
 runner = CliRunner()
 
 
+class Feed:
+    """Streams the software camera pushes a frame to; None for every active stream."""
+
+    streams: list[str] | None = None
+
+
 @pytest.fixture
-def feed(driver, camera, monkeypatch):
+def feed(driver, camera, monkeypatch) -> Feed:
     """
     Push a frame to the fed streams each time `rs stream play` waits for one: the software
-    camera produces no frames on its own. Every active stream is fed until `feed` is set to
-    a list of stream names
+    camera produces no frames on its own
     """
-    fed: list[str | None] = [None]
+    fed = Feed()
     wait = driver.wait_for_frameset
 
-    def push_then_wait(timeout: float = 3.0):
-        camera.push_frames(fed[0])
-        return wait(timeout)
+    def push_then_wait(*args, **kwargs):
+        camera.push_frames(fed.streams)
+        return wait(*args, **kwargs)
 
     monkeypatch.setattr(driver, "wait_for_frameset", push_then_wait)
     return fed
@@ -45,7 +50,7 @@ def test_duration_bound_stops_on_its_own(feed):
 
 
 def test_requested_stream_without_frames_fails(feed):
-    feed[0] = ["Depth"]
+    feed.streams = ["Depth"]
     result = runner.invoke(app, ["--json", "stream", "play", "depth", "color", "--frames", "4"])
     assert result.exit_code == NoFrames.exit_code, result.output
     assert result.stdout == ""
@@ -78,12 +83,12 @@ def test_unbounded_run_streams_until_interrupted(feed, driver, monkeypatch):
     waits = 0
     wait = driver.wait_for_frameset
 
-    def interrupt_after_20(timeout: float = 3.0):
+    def interrupt_after_20(*args, **kwargs):
         nonlocal waits
         waits += 1
         if waits > 20:
             raise KeyboardInterrupt
-        return wait(timeout)
+        return wait(*args, **kwargs)
 
     monkeypatch.setattr(driver, "wait_for_frameset", interrupt_after_20)
     result = runner.invoke(app, ["stream", "play", "depth"])

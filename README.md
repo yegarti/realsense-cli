@@ -273,7 +273,8 @@ parsers.
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
 `rs stream play` needs `--frames` or `--duration` under `--json`; without them it runs until
-interrupted and fails with exit code `2`.
+interrupted and fails with exit code `2`. Under `--json` the live view is off, so stdout holds
+only the summary.
 
 With `--json`, an error is a JSON object on the last line of stderr (warnings such as the
 multiple-devices notice may come before it), stdout stays empty, and the exit code is the same as
