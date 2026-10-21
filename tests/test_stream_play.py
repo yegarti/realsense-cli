@@ -102,9 +102,10 @@ def test_unbounded_run_streams_until_interrupted(feed, driver, monkeypatch):
 
 @pytest.mark.parametrize("bound", [["--frames", "0"], ["--duration", "0"]])
 def test_non_positive_bound_is_usage_error(driver, bound):
-    result = runner.invoke(app, ["stream", "play", *bound])
+    # under --json: Rich colours the plain usage message, which splits the option name
+    result = runner.invoke(app, ["--json", "stream", "play", *bound])
     assert result.exit_code == 2, result.output
-    assert bound[0] in result.stderr
+    assert bound[0] in json.loads(result.stderr)["error"]["message"]
 
 
 def test_default_stream_without_frames_fails(feed, monkeypatch):
