@@ -141,9 +141,13 @@ rs config restore --keep-going            # don't stop at a control that fails t
 Only controls whose value changed are listed. Read-only controls are skipped. Unlike `rs reset`,
 the device stays connected.
 
-Some controls move others, so `visual_preset` is written first and the auto modes
-(`enable_auto_exposure`, `enable_auto_white_balance`) last. While an auto mode is on and stays on,
-the camera drives exposure, gain or white balance itself, and restore leaves them alone.
+Some controls move others, so `visual_preset` is written first, and the auto modes
+(`enable_auto_exposure`, `enable_auto_white_balance`) and gates (`auto_exposure_limit_toggle`,
+`auto_gain_limit_toggle`, `hdr_enabled`) last. Restore leaves alone:
+
+- exposure, gain and white balance while their auto mode is on and stays on: the camera drives them
+- the auto exposure/gain limits and the HDR sequence while their gate ends off: they don't apply then
+- `error_polling_enabled`: the SDK turns it back on in every new process
 
 A control that fails to write stops the restore with exit code `7`; controls already written stay
 restored. With `--keep-going` the other controls are still restored, the failed ones are listed,

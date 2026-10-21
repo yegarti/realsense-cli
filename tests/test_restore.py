@@ -106,13 +106,21 @@ def test_table_says_when_nothing_changed(driver):
 
 
 @pytest.fixture
-def preset_driver(make_driver, monkeypatch):
-    """A depth sensor with a visual preset, recording every control written in `.writes`."""
+def linked_driver(make_driver, monkeypatch):
+    """
+    A depth sensor with the D455's linked controls, recording every control written in
+    `.writes`. The software device doesn't model how they move each other.
+    """
     spec = replace(
         d435_sensor(STEREO),
         options=[
             *d435_sensor(STEREO).options,
-            Option("visual_preset", "", 0.0, 5.0, 1.0, 0.0, int),
+            Option("visual_preset", "", 0.0, 7.0, 1.0, 0.0, int),
+            Option("auto_exposure_limit", "", 1.0, 200000.0, 1.0, 8500.0, int),
+            Option("auto_exposure_limit_toggle", "", 0.0, 1.0, 1.0, 0.0, int),
+            Option("hdr_enabled", "", 0.0, 1.0, 1.0, 0.0, int),
+            Option("sequence_name", "", 0.0, 3.0, 1.0, 1.0, int),
+            Option("error_polling_enabled", "", 0.0, 1.0, 1.0, 0.0, int),
         ],
     )
     driver = make_driver(SoftwareCamera(D435, [spec]))
@@ -127,23 +135,65 @@ def preset_driver(make_driver, monkeypatch):
     return driver
 
 
-def test_preset_first_and_auto_modes_last(preset_driver):
-    preset_driver.set_control_values(
+def test_preset_first_and_auto_modes_last(linked_driver):
+    linked_driver.set_control_values(
         STEREO,
         {"enable_auto_exposure": 0, "laser_power": 30, "exposure": 1000, "visual_preset": 3},
     )
-    preset_driver.writes.clear()
+    linked_driver.writes.clear()
 
     restore_json("depth")
 
-    assert preset_driver.writes[0] == "visual_preset"
-    assert preset_driver.writes[-1] == "enable_auto_exposure"
-    assert set(preset_driver.writes) == {
+    assert linked_driver.writes[0] == "visual_preset"
+    assert linked_driver.writes[-1] == "enable_auto_exposure"
+    assert set(linked_driver.writes) == {
         "visual_preset",
         "laser_power",
         "exposure",
         "enable_auto_exposure",
     }
+
+
+def test_gated_control_left_alone_when_gate_ends_off(linked_driver):
+    # The limit only applies while its toggle is on; on a D455 it reads 200000 once it's off
+    linked_driver.set_control_values(
+        STEREO, {"auto_exposure_limit": 1000, "auto_exposure_limit_toggle": 1}
+    )
+    linked_driver.writes.clear()
+
+    restored = restore_json("depth")
+
+    assert linked_driver.writes == ["auto_exposure_limit_toggle"]
+    assert [r["control"] for r in restored] == ["auto_exposure_limit_toggle"]
+
+
+def test_gated_control_restored_while_gate_stays_on(linked_driver):
+    linked_driver.set_control_values(
+        STEREO, {"auto_exposure_limit": 1000, "auto_exposure_limit_toggle": 1}
+    )
+
+    restore_json("depth", "auto_exposure_limit")
+
+    assert linked_driver.get_control_values(STEREO, ["auto_exposure_limit"]) == {
+        "auto_exposure_limit": 8500.0
+    }
+
+
+def test_hdr_sequence_left_alone_while_hdr_is_off(linked_driver):
+    linked_driver.set_control_values(STEREO, {"sequence_name": 0})
+    linked_driver.writes.clear()
+
+    assert restore_json("depth") == []
+    assert linked_driver.writes == []
+
+
+def test_session_control_is_never_written(linked_driver):
+    # The SDK turns error polling back on in every new process
+    linked_driver.set_control_values(STEREO, {"error_polling_enabled": 1})
+    linked_driver.writes.clear()
+
+    assert restore_json("depth") == []
+    assert linked_driver.writes == []
 
 
 @pytest.fixture

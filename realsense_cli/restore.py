@@ -1,11 +1,19 @@
 """
 Control restore: set a sensor's controls back to their defaults.
 
-On a real camera some controls move others. Writing a visual preset rewrites the controls it
-covers, and writing a control the camera drives in an auto mode (exposure, gain, white balance)
-turns that auto mode off. So the preset is written first, then the plain controls, then the
-auto modes, each step only writing what still differs from its default when it runs. A control
-the camera drives is left alone while its auto mode is on and stays on.
+On a real camera some controls move others:
+
+- Writing a visual preset rewrites the controls it covers.
+- Writing a control the camera drives in an auto mode (exposure, gain, white balance) turns that
+  auto mode off.
+- A gated control (an auto exposure limit, an HDR sequence) only applies while its gate is on.
+  Writing it can turn the gate on, and while the gate is off it may read as something else (a
+  D455 reads an exposure limit as 200000).
+
+So the preset is written first, then the plain controls, then the auto modes and gates, each
+step only writing what still differs from its default when it runs. A control the camera drives
+is left alone while its auto mode is on and stays on, and a gated control while its gate ends
+off. Session controls are never written: the SDK resets them in every new process.
 """
 
 from typing import Any
@@ -20,6 +28,15 @@ AUTO_MODES: dict[str, list[str]] = {
     "enable_auto_exposure": ["exposure", "gain"],
     "enable_auto_white_balance": ["white_balance"],
 }
+
+# Gate -> the controls that only apply while it's on
+GATES: dict[str, list[str]] = {
+    "auto_exposure_limit_toggle": ["auto_exposure_limit"],
+    "auto_gain_limit_toggle": ["auto_gain_limit"],
+    "hdr_enabled": ["sequence_name", "sequence_id"],
+}
+
+SESSION_CONTROLS = {"error_polling_enabled"}
 
 Row = dict[str, Any]
 
@@ -43,13 +60,14 @@ def restore_controls(
         for c in controls
         if not c.read_only and (not names or c.name in names)
     }
-    for control in _auto_driven(driver, sensor, known, defaults):
+    for control in _left_alone(driver, sensor, known, defaults):
         defaults.pop(control, None)
 
     old = driver.get_control_values(sensor, list(defaults))
     failed = []
-    plain = [name for name in defaults if name != PRESET and name not in AUTO_MODES]
-    for step in ([PRESET], plain, list(AUTO_MODES)):
+    toggles = [*AUTO_MODES, *GATES]
+    plain = [name for name in defaults if name != PRESET and name not in toggles]
+    for step in ([PRESET], plain, toggles):
         step = [name for name in step if name in defaults]
         current = driver.get_control_values(sensor, step)
         for name in step:
@@ -72,18 +90,22 @@ def restore_controls(
     return restored, failed
 
 
-def _auto_driven(
+def _left_alone(
     driver: DriverProtocol, sensor: str, known: list[str], defaults: dict[str, float]
-) -> list[str]:
+) -> set[str]:
     """
-    Controls the camera drives because their auto mode is on now and stays on after restoring
+    Controls restoring must not write: session controls, controls the camera drives in an auto
+    mode that is on and stays on, and gated controls whose gate ends off
     """
-    driven = []
+    toggles = [name for name in (*AUTO_MODES, *GATES) if name in known]
+    current = driver.get_control_values(sensor, toggles)
+    # A toggle that isn't being restored keeps its current value
+    final = {name: defaults.get(name, current[name]) for name in toggles}
+    left_alone = set(SESSION_CONTROLS)
     for mode, controls in AUTO_MODES.items():
-        if mode not in known:
-            continue
-        on = driver.get_control_values(sensor, [mode])[mode] == 1
-        # An auto mode that isn't being restored keeps its current value
-        if on and defaults.get(mode, 1) == 1:
-            driven += controls
-    return driven
+        if current.get(mode) == 1 and final[mode] == 1:
+            left_alone.update(controls)
+    for gate, controls in GATES.items():
+        if final.get(gate) == 0:
+            left_alone.update(controls)
+    return left_alone
