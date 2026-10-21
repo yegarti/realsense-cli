@@ -57,6 +57,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 | `rs info` | `commands/info.py` | Device details (every camera info field); with profiles or `--all-profiles`, intrinsics and extrinsics |
 | `rs config list/get/set/restore` | `commands/config.py`, `restore.py` | Read/write sensor controls, restore defaults |
 | `rs stream list/play` | `commands/stream.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream |
+| `rs capture` | `commands/capture.py`, `png.py` | Bounded run that saves framesets as PNGs plus a `capture.json` sidecar |
 | `rs bag info` | `commands/bag.py` | Inspect ROS bag files |
 | `rs reset` | `cli.py` | Hardware reset |
 
@@ -69,7 +70,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 - `Option` — a control's range, step and default as `float`, with `vtype` `int` or `float`
 - `Profile` — `(stream, resolution, fps, format, index)`; CLI syntax: `depth-640x480-30-z16`
 - `Calibration` — `StreamIntrinsics` (an `Intrinsics` shared by a stream's profiles at one resolution) and `Extrinsics` between streams
-- `Frame` / `FrameSet` — single frame and `dict[str, Frame]` keyed by stream name
+- `Frame` / `FrameSet` — single frame and `dict[str, Frame]` keyed by stream name; `wait_for_frameset(images=True)` also fills a video frame's `Image` (and a depth frame's SDK-colorized one)
 
 ### Output
 

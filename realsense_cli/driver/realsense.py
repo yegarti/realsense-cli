@@ -20,6 +20,7 @@ from realsense_cli.types import (
     Extrinsics,
     Frame,
     FrameSet,
+    Image,
     Intrinsics,
     Option,
     Profile,
@@ -66,6 +67,16 @@ def _intrinsics(rs_intrinsics: rs.intrinsics) -> Intrinsics:
     )
 
 
+def _image(rs_frame: rs.video_frame) -> Image:
+    width, height = rs_frame.get_width(), rs_frame.get_height()
+    data = bytes(rs_frame.get_data())
+    row = width * rs_frame.get_bytes_per_pixel()
+    stride = rs_frame.get_stride_in_bytes()
+    if stride != row:
+        data = b"".join(data[y * stride : y * stride + row] for y in range(height))
+    return Image(width, height, rs_frame.get_profile().format().name, data)
+
+
 class Realsense:
     """
     pyrealsense2 wrapper driver
@@ -106,6 +117,7 @@ class Realsense:
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
         self._pipe_profile: rs.pipeline_profile | None = None
         self._frame_queue: rs.frame_queue = rs.frame_queue(capacity=_FRAME_QUEUE_CAPACITY)
+        self._colorizer: rs.colorizer = rs.colorizer()
 
     def _setup(self) -> None:
         self._query()
@@ -479,10 +491,20 @@ class Realsense:
                     rs_sensor.close()
         self._streaming = False
 
-    def wait_for_frameset(self, timeout: float = 3.0) -> FrameSet | None:
+    def depth_scale(self) -> float | None:
+        """
+        Meters per depth unit of the active device, None when it has no depth sensor
+        """
+        for rs_sensor in self._sensors[self._device].values():
+            if rs_sensor.is_depth_sensor():
+                return _float32(rs_sensor.as_depth_sensor().get_depth_scale())
+        return None
+
+    def wait_for_frameset(self, timeout: float = 3.0, images: bool = False) -> FrameSet | None:
         """
         Get next frameset waiting in queue.
-        return None when no frameset arrive after timeout
+        return None when no frameset arrive after timeout.
+        With IMAGES, video frames also carry their image, and depth frames their colorized one
         """
         result: FrameSet = {}
         arrived, rs_frame = self._frame_queue.try_wait_for_frame(int(timeout * 1000))
@@ -511,6 +533,11 @@ class Realsense:
                 index=rs_frame.get_frame_number(),
                 metadata=metadata,
             )
+            if images and rs_frame.is_video_frame():
+                frame.image = _image(rs_frame.as_video_frame())
+                if rs_frame.is_depth_frame():
+                    colorized = self._colorizer.colorize(rs_frame)
+                    frame.colorized = _image(colorized.as_video_frame())
             logger.debug(
                 "{}\t#{} {:.2}ms - {}",
                 frame.profile.stream,

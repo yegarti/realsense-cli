@@ -10,6 +10,7 @@ from typer.core import TyperGroup
 from typer.exceptions import Abort, Exit, TyperException
 
 from realsense_cli.commands.bag import bag_app
+from realsense_cli.commands.capture import rs_capture
 from realsense_cli.commands.config import config_app
 from realsense_cli.commands.info import rs_info
 from realsense_cli.commands.stream import stream_app
@@ -90,6 +91,8 @@ def rs_list(ctx: typer.Context) -> None:
 
 
 app.command(name="info")(rs_info)
+
+app.command(name="capture")(rs_capture)
 
 app.add_typer(config_app, name="config")
 

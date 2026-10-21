@@ -12,29 +12,6 @@ from realsense_cli.types import Frame, Profile, Resolution
 runner = CliRunner()
 
 
-class Feed:
-    """Streams the software camera pushes a frame to; None for every active stream."""
-
-    streams: list[str] | None = None
-
-
-@pytest.fixture
-def feed(driver, camera, monkeypatch) -> Feed:
-    """
-    Push a frame to the fed streams each time `rs stream play` waits for one: the software
-    camera produces no frames on its own
-    """
-    fed = Feed()
-    wait = driver.wait_for_frameset
-
-    def push_then_wait(*args, **kwargs):
-        camera.push_frames(fed.streams)
-        return wait(*args, **kwargs)
-
-    monkeypatch.setattr(driver, "wait_for_frameset", push_then_wait)
-    return fed
-
-
 def test_frames_bound_emits_frame_counts(feed):
     result = runner.invoke(app, ["--json", "stream", "play", "depth", "--frames", "5"])
     assert result.exit_code == 0, result.output

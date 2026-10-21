@@ -25,8 +25,12 @@ def _drop_log_handlers():
 
 
 @pytest.fixture
-def camera() -> SoftwareCamera:
-    return d435()
+def camera(request) -> SoftwareCamera:
+    """
+    The simulated D435, or the camera a test builds with
+    `@pytest.mark.parametrize("camera", [factory], indirect=True)`
+    """
+    return getattr(request, "param", d435)()
 
 
 @pytest.fixture
@@ -59,6 +63,33 @@ def two_cameras(inject_driver):
 @pytest.fixture
 def driver(camera, make_driver) -> Realsense:
     return make_driver(camera)
+
+
+class Feed:
+    """Streams the software camera pushes a frame to; None for every active stream."""
+
+    streams: list[str] | None = None
+
+
+@pytest.fixture
+def feed(driver, camera, monkeypatch) -> Feed:
+    """
+    Push a frame to the fed streams each time a command waits for one and none is queued: the
+    software camera produces no frames on its own. Pushing while frames are queued would fill
+    the queue, which then drops the frames of every sensor but the first to deliver
+    """
+    fed = Feed()
+    wait = driver.wait_for_frameset
+
+    def push_then_wait(timeout: float = 3.0, **kwargs):
+        frameset = wait(0, **kwargs)
+        if frameset is None:
+            camera.push_frames(fed.streams)
+            frameset = wait(timeout, **kwargs)
+        return frameset
+
+    monkeypatch.setattr(driver, "wait_for_frameset", push_then_wait)
+    return fed
 
 
 @pytest.fixture
