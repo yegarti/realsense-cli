@@ -3,6 +3,13 @@ from realsense_cli.types import Profile, Stream
 _stream_order: dict[str, int] = {stream: i for i, stream in enumerate(Stream)}
 
 
+def stream_rank(stream: str) -> int:
+    """
+    Where STREAM sorts: known streams in `Stream` order, then the rest
+    """
+    return _stream_order.get(stream, len(_stream_order))
+
+
 def group_profiles(profiles: list[Profile]) -> dict[Profile, list[int]]:
     """
     Group profiles that differ only by FPS
@@ -10,7 +17,7 @@ def group_profiles(profiles: list[Profile]) -> dict[Profile, list[int]]:
 
     def sort_key(pro: Profile):
         return (
-            _stream_order.get(pro.stream, 99),
+            stream_rank(pro.stream),
             pro.resolution.width * pro.resolution.height,
             pro.format,
             pro.fps,

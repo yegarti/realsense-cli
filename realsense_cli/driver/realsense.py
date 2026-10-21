@@ -28,9 +28,14 @@ from realsense_cli.types import (
     StreamIntrinsics,
     sensor_label,
 )
-from realsense_cli.utils import find_origin_sensor
+from realsense_cli.utils import find_origin_sensor, stream_rank
 
 _PROFILES_HINT = "Run `rs stream list` to see the supported profiles"
+
+# The SDK's camera info fields, with the connection type (USB, GMSL, DDS) moved up to the USB
+# type it qualifies
+_CAMERA_INFO_ORDER = [name for name in rs.camera_info.__members__ if name != "connection_type"]
+_CAMERA_INFO_ORDER.insert(_CAMERA_INFO_ORDER.index("usb_type_descriptor"), "connection_type")
 
 # Frames waiting for `wait_for_frameset`. Sensors deliver into one queue, which drops frames
 # once full: a capacity of 1 starves every sensor but the last to deliver
@@ -157,14 +162,20 @@ class Realsense:
 
     def camera_info(self) -> dict[str, str]:
         """
-        Every camera info field the active device supports, keyed by its `rs.camera_info` name
+        Every camera info field the active device supports, keyed by its `rs.camera_info` name.
+        A field the device reports as 'unknown' says nothing, e.g. the IMU type of a D415,
+        which has no IMU, and is left out
         """
+        info = {}
         # by `__members__` key: `rs.camera_info.name` is a member, so members have no `.name`
-        return {
-            name: self._device.get_info(info)
-            for name, info in rs.camera_info.__members__.items()
-            if self._device.supports(info)
-        }
+        for name in _CAMERA_INFO_ORDER:
+            rs_info = rs.camera_info.__members__[name]
+            if not self._device.supports(rs_info):
+                continue
+            value = self._device.get_info(rs_info)
+            if value.lower() != "unknown":
+                info[name] = value
+        return info
 
     def list_controls(self, sensor: str) -> list[Option]:
         """
@@ -386,6 +397,10 @@ class Realsense:
             for rs_profile in rs_sensor.get_stream_profiles()
             if rs_profile.is_video_stream_profile()
         ]
+        # known streams first, in the order the CLI lists them; a stable sort keeps the
+        # device's own order within a stream
+        rs_profiles.sort(key=lambda rs_profile: stream_rank(rs_profile.stream_name()))
+
         if profiles is not None:
             for profile in profiles:
                 if not any(self._matches(p, profile) for p in rs_profiles):
@@ -403,11 +418,16 @@ class Realsense:
         groups: dict[tuple, list[rs.video_stream_profile]] = defaultdict(list)
         for rs_profile in rs_profiles:
             vsp = rs_profile.as_video_stream_profile()
+            try:
+                intr = _intrinsics(vsp.get_intrinsics())
+            except RuntimeError:
+                # the SDK has none for some profiles, e.g. the unrectified infrared Y16 ones
+                intr = None
             key = (
                 vsp.stream_name(),
                 vsp.stream_index(),
                 Resolution(vsp.width(), vsp.height()),
-                _intrinsics(vsp.get_intrinsics()),
+                intr,
             )
             groups[key].append(vsp)
         intrinsics = [

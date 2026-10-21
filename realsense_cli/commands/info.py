@@ -4,7 +4,7 @@ import typer
 
 from realsense_cli.printer import device_details, emit
 from realsense_cli.session import require_device
-from realsense_cli.types import _STREAM_ALIASES, Calibration, Profile
+from realsense_cli.types import _STREAM_ALIASES, Calibration, Intrinsics, Profile
 
 
 def rs_info(
@@ -58,12 +58,7 @@ def _calibration_payload(calibration: Calibration) -> dict[str, Any]:
                 "height": group.resolution.height,
                 "formats": list(group.formats),
                 "fps": list(group.fps),
-                "ppx": group.intrinsics.ppx,
-                "ppy": group.intrinsics.ppy,
-                "fx": group.intrinsics.fx,
-                "fy": group.intrinsics.fy,
-                "model": group.intrinsics.model,
-                "coeffs": list(group.intrinsics.coeffs),
+                **_intrinsics_payload(group.intrinsics),
             }
             for group in calibration.intrinsics
         ],
@@ -76,4 +71,17 @@ def _calibration_payload(calibration: Calibration) -> dict[str, Any]:
             }
             for ext in calibration.extrinsics
         ],
+    }
+
+
+def _intrinsics_payload(intrinsics: Intrinsics | None) -> dict[str, Any]:
+    if intrinsics is None:
+        return dict.fromkeys(("ppx", "ppy", "fx", "fy", "model", "coeffs"))
+    return {
+        "ppx": intrinsics.ppx,
+        "ppy": intrinsics.ppy,
+        "fx": intrinsics.fx,
+        "fy": intrinsics.fy,
+        "model": intrinsics.model,
+        "coeffs": list(intrinsics.coeffs),
     }

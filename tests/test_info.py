@@ -2,6 +2,7 @@ import pytest
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
+from realsense_cli.driver.software import D435, D435_SENSORS, SoftwareCamera
 from realsense_cli.errors import InvalidProfile
 from tests.test_json import invoke_json, json_error
 
@@ -18,12 +19,25 @@ def test_info_lists_camera_info_and_sensors_without_calibration(driver):
             "physical_port": "/sys/devices/pci0000:00/usb2/2-1",
             "product_id": "0B07",
             "camera_locked": "YES",
+            "connection_type": "USB",
             "usb_type_descriptor": "3.2",
             "product_line": "D400",
             "asic_serial_number": "123456789012",
+            "imu_type": "BMI055",
         },
         "sensors": ["Stereo Module", "RGB Camera", "Motion Module"],
     }
+
+
+def test_connection_type_comes_right_before_usb_type(driver):
+    fields = list(invoke_json("info")["device"])
+    assert fields.index("connection_type") + 1 == fields.index("usb_type_descriptor")
+
+
+def test_unknown_camera_info_is_left_out(make_driver):
+    # a D415 has no IMU, and reports its IMU type as "unknown"
+    make_driver(SoftwareCamera(D435, D435_SENSORS, {"imu_type": "unknown"}))
+    assert "imu_type" not in invoke_json("info")["device"]
 
 
 IDENTITY = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
@@ -126,9 +140,37 @@ def test_table_shows_device_details_without_calibration(driver):
     assert "Intrinsics" not in result.stdout
 
 
-def test_table_shows_calibration_for_profiles(driver):
+def table_row(output: str, *cells: str) -> list[str]:
+    """The cells of the one row in OUTPUT that holds all of CELLS"""
+    [row] = [line for line in output.splitlines() if all(cell in line for cell in cells)]
+    return row.split()
+
+
+def test_table_shows_intrinsics_with_their_attributes(driver):
     result = runner.invoke(app, ["info", "depth", "color"])
     assert result.exit_code == 0, result.output
-    assert "Intrinsics of Color 640x480 RGB8 @ 6/15/30 fps" in result.stdout
-    assert "inverse_brown_conrady" in result.stdout
-    assert "0.0147, 0.0001, 0.0004" in result.stdout
+    assert table_row(result.stdout, "ppx", "fy") == [
+        "Stream", "Resolution", "ppx", "ppy", "fx", "fy", "Formats"
+    ]  # fmt: skip
+    assert table_row(result.stdout, "Depth", "640x480") == [
+        "Depth", "640x480", "320.5", "240.25", "385.5", "385.12344", "Z16"
+    ]  # fmt: skip
+
+
+def test_table_shows_distortion_once_per_stream(driver):
+    result = runner.invoke(app, ["info", "--all-profiles"])
+    assert result.exit_code == 0, result.output
+    assert table_row(result.stdout, "Color", "inverse_brown_conrady") == [
+        "Color", "inverse_brown_conrady", "0.125,", "-0.25,", "0.001,", "-0.0005,", "0.0625"
+    ]  # fmt: skip
+    assert len([line for line in result.stdout.splitlines() if "brown_conrady" in line]) == 4
+
+
+def test_table_shows_extrinsics(driver):
+    result = runner.invoke(app, ["info", "depth", "color"])
+    assert result.exit_code == 0, result.output
+    rows = [line.split() for line in result.stdout.splitlines()]
+    # the rotation matrix, and the translation as a column beside it
+    assert ["Depth", "Color", "1", "0", "0", "0.0147"] in rows
+    assert ["0", "1", "0", "0.0001"] in rows
+    assert ["0", "0", "1", "0.0004"] in rows

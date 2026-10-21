@@ -211,8 +211,10 @@ D435_CAMERA_INFO: dict[str, str] = {
     "physical_port": "/sys/devices/pci0000:00/usb2/2-1",
     "product_id": "0B07",
     "camera_locked": "YES",
+    "connection_type": "USB",
     "product_line": "D400",
     "asic_serial_number": "123456789012",
+    "imu_type": "BMI055",
 }
 
 _D435_DEPTH_INTRINSICS = Intrinsics(320.5, 240.25, 385.5, 385.12345, "brown_conrady", (0,) * 5)

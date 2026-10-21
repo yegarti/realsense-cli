@@ -102,22 +102,29 @@ rs -s 801312071342 stream play depth
 ```
 > rs info
 
-                              Device
+                                            Device
 
-  Name                           Intel RealSense D435
-  Serial Number                  801312071342
-  Firmware Version               5.15.0.2
-  Recommended Firmware Version   5.16.0.1
-  Physical Port                  /sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1:1.0/...
-  Product Id                     0B07
-  Camera Locked                  YES
-  Usb Type Descriptor            3.2
-  Product Line                   D400
-  Asic Serial Number             012345678901
-  Sensors                        Stereo Module (depth)
-                                 RGB Camera (color)
-                                 Motion Module (motion)
+  Name                  RealSense D455
+  Serial Number         801312071342
+  Firmware Version      5.17.3.10
+  Physical Port         /sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1:1.0/video4linux/video0
+  Debug Op Code         15
+  Advanced Mode         YES
+  Product Id            0B5C
+  Camera Locked         NO
+  Connection Type       USB
+  Usb Type Descriptor   3.2
+  Product Line          D400
+  Asic Serial Number    031323060591
+  Firmware Update Id    031323060591
+  Imu Type              BMI055
+  Sensors               Stereo Module (depth)
+                        RGB Camera (color)
+                        Motion Module (motion)
 ```
+
+A field the device reports as `unknown` (e.g. the IMU type of a D415, which has no IMU) is left
+out.
 
 **Add calibration for some profiles, or for all of them** (like `rs-enumerate-devices -c`):
 ```sh
@@ -126,36 +133,48 @@ rs info depth-1280x720 color-0x0-30 # same partial syntax as `rs stream play`
 rs info --all-profiles              # every video profile
 ```
 ```
-Intrinsics of Depth 640x480 Z16 @ 6/15/30 fps
+> rs info --all-profiles
+...
+                                             Intrinsics
 
-  Principal Point       320.5, 240.25
-  Focal Length          385.5, 385.12344
-  Distortion            brown_conrady
-  Coefficients          0, 0, 0, 0, 0
+  Stream       Resolution         ppx          ppy          fx          fy   Formats
+ ──────────────────────────────────────────────────────────────────────────────────────────────────
+  Depth        1280x720      630.2564     361.3397    647.8624    647.8624   Z16
+               848x480      417.54486    240.88754   429.20886   429.20886   Z16
+               ...
 
-      Intrinsics of Color 640x480 RGB8 @ 6/15/30 fps
+  Infrared 1   1280x800           n/a          n/a         n/a         n/a   Y16
+               1280x800      630.2564     401.3397    647.8624    647.8624   Y8
+               ...
 
-  Principal Point   321.75, 243.5
-  Focal Length      615.25, 615.5
-  Distortion        inverse_brown_conrady
-  Coefficients      0.125, -0.25, 0.001, -0.0005, 0.0625
+  Color        1280x800      643.5558    404.56467    636.9544    636.7007   RGB8, BGRA8, RGBA8, BGR8, YUYV
+               ...
 
-                       Extrinsics
+                                             Distortion
 
-  From    To      Rotation   Translation (m)
- ──────────────────────────────────────────────────────
-  Depth   Color   1  0  0    0.0147, 0.0001, 0.0004
-                  0  1  0
-                  0  0  1
-  Color   Depth   1  0  0    -0.0147, -0.0001, -0.0004
-                  0  1  0
-                  0  0  1
+  Stream       Model                   Coefficients
+ ──────────────────────────────────────────────────────────────────────────────────────────────────
+  Depth        brown_conrady           0, 0, 0, 0, 0
+  Infrared 1   brown_conrady           0, 0, 0, 0, 0
+  Color        inverse_brown_conrady   -0.05178671, 0.059920404, -0.0010254717, 0.00043725056, -0.018729214
+  ...
+
+                                   Extrinsics
+
+  From    To      Rotation                                     Translation (m)
+ ──────────────────────────────────────────────────────────────────────────────
+  Depth   Color       0.9999991 -0.0011860202   0.0006337429     -0.059180804
+                   0.0011865316      0.999999 -0.00080718077   -0.00009067777
+                  -0.0006327849   0.000807932     0.99999946   -0.00015896332
+  ...
 ```
 
 Unset parts of a profile match anything, so `depth` covers every depth profile. Profiles that
-differ only in format or frame rate share their intrinsics and are shown once. Extrinsics are
-listed for each ordered pair of the matched streams. A profile that matches no video profile
-fails with exit code `6`. `rs list` stays the short summary.
+differ only in format or frame rate share their intrinsics and are shown once; the distortion
+model and coefficients, which rarely change with the resolution, are shown once per stream.
+Profiles the SDK has no intrinsics for (the infrared Y16 ones) show `n/a`. Extrinsics are listed
+for each ordered pair of the matched streams. A profile that matches no video profile fails with
+exit code `6`. `rs list` stays the short summary.
 
 ---
 
@@ -330,8 +349,8 @@ parsers.
 | Command | Output |
 |---|---|
 | `rs list` | `{"devices": [{"name", "serial", "fw", "connection", "sensors": [...]}]}` |
-| `rs info` | `{"device": {"<camera_info>": "<value>"}, "sensors": [...]}`: every camera info field the device supports, keyed by its `rs.camera_info` name (`name`, `serial_number`, `firmware_version`, `product_id`, ...) |
-| `rs info PROFILES...` / `--all-profiles` | also `"intrinsics": [{"stream", "index", "width", "height", "formats": [...], "fps": [...], "ppx", "ppy", "fx", "fy", "model", "coeffs": [...]}]` and `"extrinsics": [{"from", "to", "rotation": [9 values, column-major], "translation": [x, y, z] in meters}]` |
+| `rs info` | `{"device": {"<camera_info>": "<value>"}, "sensors": [...]}`: every camera info field the device supports and doesn't report as `unknown`, keyed by its `rs.camera_info` name (`name`, `serial_number`, `firmware_version`, `connection_type`, `product_id`, ...) |
+| `rs info PROFILES...` / `--all-profiles` | also `"intrinsics": [{"stream", "index", "width", "height", "formats": [...], "fps": [...], "ppx", "ppy", "fx", "fy", "model", "coeffs": [...]}]`, with `ppx` to `coeffs` `null` for profiles the SDK has no intrinsics for, and `"extrinsics": [{"from", "to", "rotation": [9 values, column-major], "translation": [x, y, z] in meters}]` |
 | `rs config list SENSOR` | `{"sensor", "controls": [{"name", "description", "min_value", "max_value", "step", "default_value", "vtype": "int" \| "float", "read_only"}]}` |
 | `rs config get` / `set` | `{"sensor", "values": {"<control>": <value>}}`; `set` returns the values read back from the device |
 | `rs config restore` | `{"restored": [{"sensor", "control", "old", "new"}], "failed": [{"sensor", "control", "error"}]}`; only the controls whose value changed. `failed` is only filled with `--keep-going`, which then prints the result on stdout and exits `7` |

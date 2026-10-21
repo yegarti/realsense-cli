@@ -174,7 +174,8 @@ class Intrinsics:
 @dataclass(frozen=True)
 class StreamIntrinsics:
     """
-    INTRINSICS shared by a stream's profiles at one resolution, which differ in FORMATS and FPS
+    INTRINSICS shared by a stream's profiles at one resolution, which differ in FORMATS and FPS.
+    None when the SDK has no intrinsics for them
     """
 
     stream: str
@@ -182,7 +183,7 @@ class StreamIntrinsics:
     resolution: Resolution
     formats: tuple[str, ...]
     fps: tuple[int, ...]
-    intrinsics: Intrinsics
+    intrinsics: Intrinsics | None
 
 
 @dataclass(frozen=True)
