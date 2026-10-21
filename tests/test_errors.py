@@ -58,7 +58,14 @@ def test_config_set_unknown_control(driver):
     assert_error(result, UnknownControl, "bogus", "exposure")
 
 
-@pytest.mark.parametrize("command", [["config", "list"], ["stream", "list"]])
+def test_config_restore_unknown_control(driver):
+    result = runner.invoke(app, ["config", "restore", "depth", "bogus"])
+    assert_error(result, UnknownControl, "bogus", "exposure", "asic_temperature")
+
+
+@pytest.mark.parametrize(
+    "command", [["config", "list"], ["config", "restore"], ["stream", "list"]]
+)
 def test_unknown_sensor(driver, command):
     result = runner.invoke(app, [*command, "bogus"])
     assert_error(

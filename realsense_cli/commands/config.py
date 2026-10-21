@@ -4,7 +4,8 @@ from typing import Annotated
 import typer
 
 from realsense_cli.errors import InvalidValue
-from realsense_cli.printer import emit, list_options, list_options_values
+from realsense_cli.printer import emit, list_options, list_options_values, list_restored
+from realsense_cli.restore import restore_controls
 from realsense_cli.session import require_device
 from realsense_cli.types import resolve_sensor_name
 
@@ -85,6 +86,40 @@ def config_set(
     resolved = resolve_sensor_name(sensor)
     driver.set_control_values(resolved, controls)
     _emit_values(ctx, resolved, driver.get_control_values(resolved, list(controls)))
+
+
+@config_app.command(
+    name="restore",
+    help="Restore controls to their defaults, on every sensor unless SENSOR is given",
+)
+def config_restore(
+    ctx: typer.Context,
+    sensor: Annotated[
+        str | None,
+        typer.Argument(help="Sensor name or alias (depth, color, motion)", show_default=False),
+    ] = None,
+    controls: Annotated[list[str] | None, typer.Argument(help="Controls to restore")] = None,
+    keep_going: Annotated[
+        bool,
+        typer.Option(
+            "--keep-going/", help="Restore the other controls when one fails, then report it"
+        ),
+    ] = False,
+) -> None:
+    driver = require_device(ctx)
+    sensors = [resolve_sensor_name(sensor)] if sensor else driver.sensors
+    restored, failed = [], []
+    for name in sensors:
+        sensor_restored, sensor_failed = restore_controls(driver, name, controls, keep_going)
+        restored += sensor_restored
+        failed += sensor_failed
+    emit(
+        ctx,
+        {"restored": restored, "failed": failed},
+        lambda: list_restored(restored, failed),
+    )
+    if failed:
+        raise typer.Exit(InvalidValue.exit_code)
 
 
 def _emit_values(ctx: typer.Context, sensor: str, values: dict[str, float]) -> None:

@@ -54,7 +54,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 | Command | Module | Purpose |
 |---|---|---|
 | `rs list` | `cli.py` | List connected devices |
-| `rs config list/get/set` | `commands/config.py` | Read/write sensor controls |
+| `rs config list/get/set/restore` | `commands/config.py`, `restore.py` | Read/write sensor controls, restore defaults |
 | `rs stream list/play` | `commands/stream.py` | List profiles or start live stream |
 | `rs bag info` | `commands/bag.py` | Inspect ROS bag files |
 | `rs reset` | `cli.py` | Hardware reset |

@@ -96,6 +96,29 @@ def list_options_values(options_values: dict[str, Any]):
     console.print(table)
 
 
+def list_restored(restored: list[dict[str, Any]], failed: list[dict[str, Any]]) -> None:
+    if not restored and not failed:
+        console.print("Nothing changed: the controls are already at their defaults")
+        return
+    if restored:
+        table = Table(title="Restored controls", box=box.SIMPLE)
+        table.add_column("Sensor")
+        table.add_column("Control")
+        table.add_column("Old Value")
+        table.add_column("New Value")
+        for row in restored:
+            table.add_row(row["sensor"], row["control"], str(row["old"]), str(row["new"]))
+        console.print(table)
+    if failed:
+        table = Table(title="Failed controls", box=box.SIMPLE)
+        table.add_column("Sensor")
+        table.add_column("Control")
+        table.add_column("Error")
+        for row in failed:
+            table.add_row(row["sensor"], row["control"], row["error"])
+        console.print(table)
+
+
 def list_profiles(profiles: list[Profile], title: str = "Streams"):
     table = Table(title=title, box=box.SIMPLE)
     table.add_column("Stream")

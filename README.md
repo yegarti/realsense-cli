@@ -124,6 +124,31 @@ rs config set depth exposure=15000 laser_power=120
 rs config get depth --all
 ```
 
+**Restore controls to their defaults:**
+```sh
+rs config restore                         # every control on every sensor
+rs config restore depth                   # one sensor
+rs config restore depth exposure gain     # only these controls
+rs config restore --keep-going            # don't stop at a control that fails to write
+```
+```
+                    Restored controls
+  Sensor          Control       Old Value   New Value
+ ─────────────────────────────────────────────────────
+  Stereo Module   exposure      1000.0      8500.0
+```
+
+Only controls whose value changed are listed. Read-only controls are skipped. Unlike `rs reset`,
+the device stays connected.
+
+Some controls move others, so `visual_preset` is written first and the auto modes
+(`enable_auto_exposure`, `enable_auto_white_balance`) last. While an auto mode is on and stays on,
+the camera drives exposure, gain or white balance itself, and restore leaves them alone.
+
+A control that fails to write stops the restore with exit code `7`; controls already written stay
+restored. With `--keep-going` the other controls are still restored, the failed ones are listed,
+and the exit code is `7`.
+
 ---
 
 ### `rs stream` — streaming
@@ -218,6 +243,7 @@ parsers.
 | `rs list` | `{"devices": [{"name", "serial", "fw", "connection", "sensors": [...]}]}` |
 | `rs config list SENSOR` | `{"sensor", "controls": [{"name", "description", "min_value", "max_value", "step", "default_value", "vtype": "int" \| "float", "read_only"}]}` |
 | `rs config get` / `set` | `{"sensor", "values": {"<control>": <value>}}`; `set` returns the values read back from the device |
+| `rs config restore` | `{"restored": [{"sensor", "control", "old", "new"}], "failed": [{"sensor", "control", "error"}]}`; only the controls whose value changed. `failed` is only filled with `--keep-going`, which then prints the result on stdout and exits `7` |
 | `rs stream list` | `{"profiles": [{"sensor", "stream", "width", "height", "fps", "format", "index"}]}` |
 | `rs bag info BAG` | `{"path", "duration", "topics": [{"name", "messages", "type"}]}` |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
@@ -247,6 +273,6 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `4` | Unknown sensor |
 | `5` | Unknown control |
 | `6` | Invalid or unsupported stream profile |
-| `7` | Invalid control value |
+| `7` | Invalid control value, or a control that failed to write during `rs config restore` |
 | `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
 | `130` | Interrupted (Ctrl+C) |
