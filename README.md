@@ -216,7 +216,8 @@ rs --json stream play --duration 5
 The streams checked are the ones the device started, so without profiles every default stream
 counts. A stream that received no frames fails the run with exit code `9`, as does a stream that
 sends nothing for 3 seconds before it has its N frames (or, with `--duration`, before the time
-is up).
+is up). Frames are counted by frame number: when the pipeline hands out a slower stream's last
+frame again in a later frameset, it counts once.
 
 ---
 

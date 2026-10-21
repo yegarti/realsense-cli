@@ -1,11 +1,13 @@
 import json
 import time
+from itertools import count
 
 import pytest
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
 from realsense_cli.errors import NoFrames
+from realsense_cli.types import Frame, Profile, Resolution
 
 runner = CliRunner()
 
@@ -130,3 +132,24 @@ def test_silent_stream_fails_duration_run_early(feed, monkeypatch):
     assert result.exit_code == NoFrames.exit_code, result.output
     assert "Color" in result.stderr
     assert time.monotonic() - started < 1
+
+
+def test_repeated_frame_counts_once(driver, monkeypatch):
+    """The pipeline can hand out a slower stream's last frame again in later framesets"""
+    monkeypatch.setattr("realsense_cli.commands.stream.FRAME_TIMEOUT", 0.1)
+    depth = Profile("Depth", Resolution(640, 480), 30, "z16", 0)
+    color = Profile("Color", Resolution(640, 480), 30, "rgb8", 0)
+    indexes = count()
+
+    def color_stuck_on_first_frame(*args, **kwargs):
+        index = next(indexes)
+        return {
+            "Depth": Frame(depth, timestamp=index, index=index, metadata={}),
+            "Color": Frame(color, timestamp=0, index=0, metadata={}),
+        }
+
+    monkeypatch.setattr(driver, "wait_for_frameset", color_stuck_on_first_frame)
+    result = runner.invoke(app, ["stream", "play", "depth", "color", "--frames", "3"])
+    assert result.exit_code == NoFrames.exit_code, result.output
+    assert "No frames arrived from Color" in result.stderr
+    assert "Color 1" in result.stderr

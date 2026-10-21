@@ -161,13 +161,14 @@ def _count_frames(
     duration: float | None,
 ) -> dict[str, int]:
     """
-    Frames received per stream until each of STREAMS received FRAMES frames or DURATION
+    New frames received per stream until each of STREAMS received FRAMES frames or DURATION
     seconds passed. STREAMS start at 0, so a stream that got nothing still shows up. A stream
     still short of FRAMES that sends nothing for FRAME_TIMEOUT seconds fails the run
     """
     counts = dict.fromkeys(streams, 0)
     started = time.monotonic()
     last_frame = dict.fromkeys(streams, started)
+    last_index: dict[str, int] = {}
     deadline = None if duration is None else started + duration
     while True:
         now = time.monotonic()
@@ -190,7 +191,11 @@ def _count_frames(
         if frameset is None:
             continue
         now = time.monotonic()
-        for stream in frameset:
+        for stream, frame in frameset.items():
+            # the pipeline can hand out a slower stream's last frame again in later framesets
+            if last_index.get(stream) == frame.index:
+                continue
+            last_index[stream] = frame.index
             counts[stream] = counts.get(stream, 0) + 1
             last_frame[stream] = now
         view.update(frameset)
