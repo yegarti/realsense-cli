@@ -11,6 +11,7 @@
 ## Features
 
 - **List** connected devices and their supported streaming profiles
+- **Show** a device's details and calibration (intrinsics, extrinsics)
 - **Configure** sensor controls (exposure, gain, laser power, etc.)
 - **Stream** selected profiles and monitor live FPS per stream
 - **Inspect** ROS1 bag files without a full ROS installation
@@ -92,6 +93,59 @@ rs -s 801312071342 stream play depth
   Intel RealSense D415   732612060537   5.15.0.2         3.2          Stereo Module
                                                                        RGB Camera
 ```
+
+---
+
+### `rs info` — device details and calibration
+
+**Every camera info field the device reports, and its sensors:**
+```
+> rs info
+
+                              Device
+
+  Name                           Intel RealSense D435
+  Serial Number                  801312071342
+  Firmware Version               5.15.0.2
+  Recommended Firmware Version   5.16.0.1
+  Physical Port                  /sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1:1.0/...
+  Product Id                     0B07
+  Camera Locked                  YES
+  Usb Type Descriptor            3.2
+  Product Line                   D400
+  Asic Serial Number             012345678901
+  Sensors                        Stereo Module (depth)
+                                 RGB Camera (color)
+                                 Motion Module (motion)
+```
+
+**Add calibration for some profiles, or for all of them** (like `rs-enumerate-devices -c`):
+```sh
+rs info depth color                 # every depth and color video profile
+rs info depth-1280x720 color-0x0-30 # same partial syntax as `rs stream play`
+rs info --all-profiles              # every video profile
+```
+```
+      Intrinsics of Color 640x480 RGB8 @ 6/15/30 fps
+
+  Principal Point   321.75, 243.5
+  Focal Length      615.25, 615.5
+  Distortion        inverse_brown_conrady
+  Coefficients      0.125, -0.25, 0.001, -0.0005, 0.0625
+
+                Extrinsics
+
+  From    To      Rotation   Translation (m)
+ ──────────────────────────────────────────────
+  Depth   Color   1  0  0    0.0147, 0.0001, 0.0004
+                  0  1  0
+                  0  0  1
+```
+
+Unset parts of a profile match anything, so `depth` covers every depth profile. Profiles that
+differ only in format or frame rate share their intrinsics and are shown once. Extrinsics are
+listed for each ordered pair of the matched streams. A profile that matches no video profile
+fails with exit code `6`. `rs list` stays the short summary.
 
 ---
 
@@ -266,6 +320,8 @@ parsers.
 | Command | Output |
 |---|---|
 | `rs list` | `{"devices": [{"name", "serial", "fw", "connection", "sensors": [...]}]}` |
+| `rs info` | `{"device": {"<camera_info>": "<value>"}, "sensors": [...]}`: every camera info field the device supports, keyed by its `rs.camera_info` name (`name`, `serial_number`, `firmware_version`, `product_id`, ...) |
+| `rs info PROFILES...` / `--all-profiles` | also `"intrinsics": [{"stream", "index", "width", "height", "formats": [...], "fps": [...], "ppx", "ppy", "fx", "fy", "model", "coeffs": [...]}]` and `"extrinsics": [{"from", "to", "rotation": [9 values, column-major], "translation": [x, y, z] in meters}]` |
 | `rs config list SENSOR` | `{"sensor", "controls": [{"name", "description", "min_value", "max_value", "step", "default_value", "vtype": "int" \| "float", "read_only"}]}` |
 | `rs config get` / `set` | `{"sensor", "values": {"<control>": <value>}}`; `set` returns the values read back from the device |
 | `rs config restore` | `{"restored": [{"sensor", "control", "old", "new"}], "failed": [{"sensor", "control", "error"}]}`; only the controls whose value changed. `failed` is only filled with `--keep-going`, which then prints the result on stdout and exits `7` |
@@ -300,7 +356,7 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `3` | No device connected, none matches `--serial`, or a reset device didn't reconnect |
 | `4` | Unknown sensor |
 | `5` | Unknown control |
-| `6` | Invalid or unsupported stream profile |
+| `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile) |
 | `7` | Invalid control value, or a control that failed to write during `rs config restore` |
 | `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
 | `9` | A stream in a bounded `rs stream play` received no frames, or stopped sending them for 3 seconds |

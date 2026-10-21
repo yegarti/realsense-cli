@@ -156,6 +156,54 @@ class Profile:
         )
 
 
+@dataclass(frozen=True)
+class Intrinsics:
+    """
+    A video profile's calibration: principal point and focal length in pixels, and the lens
+    distortion MODEL (an `rs.distortion` name) with its COEFFS
+    """
+
+    ppx: float
+    ppy: float
+    fx: float
+    fy: float
+    model: str
+    coeffs: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class StreamIntrinsics:
+    """
+    INTRINSICS shared by a stream's profiles at one resolution, which differ in FORMATS and FPS
+    """
+
+    stream: str
+    index: int
+    resolution: Resolution
+    formats: tuple[str, ...]
+    fps: tuple[int, ...]
+    intrinsics: Intrinsics
+
+
+@dataclass(frozen=True)
+class Extrinsics:
+    """
+    The transform of a point from stream SOURCE's coordinate frame to stream TARGET's: a 3x3
+    ROTATION in column-major order, then a TRANSLATION in meters
+    """
+
+    source: str
+    target: str
+    rotation: tuple[float, ...]
+    translation: tuple[float, ...]
+
+
+@dataclass
+class Calibration:
+    intrinsics: list[StreamIntrinsics]
+    extrinsics: list[Extrinsics]
+
+
 @dataclass
 class Frame:
     profile: Profile

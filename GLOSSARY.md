@@ -21,6 +21,15 @@ A concrete way to open a stream: its resolution, frame rate and format, written
 `depth-640x480-30-z16`.
 _Avoid_: Mode, stream config
 
+**Camera info**:
+The fixed details a device reports about itself, e.g. its name, serial number, firmware
+version and product line (`rs info`).
+_Avoid_: Device info (that is `rs list`'s short summary)
+
+**Calibration**:
+A device's intrinsics (each video profile's principal point, focal length and lens distortion)
+and extrinsics (the rotation and translation from one stream's coordinate frame to another's).
+
 **Control**:
 A setting on a sensor with a range, step and default, e.g. exposure or laser power.
 _Avoid_: Option (the SDK's word), setting, parameter

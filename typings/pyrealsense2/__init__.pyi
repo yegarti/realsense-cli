@@ -42,6 +42,27 @@ class frame_metadata_value:
     @property
     def name(self) -> str: ...
 
+class distortion:
+    __members__: ClassVar[dict[str, distortion]]
+    @property
+    def name(self) -> str: ...
+
+class intrinsics:
+    width: int
+    height: int
+    ppx: float
+    ppy: float
+    fx: float
+    fy: float
+    model: distortion
+    coeffs: list[float]
+    def __init__(self) -> None: ...
+
+class extrinsics:
+    rotation: list[float]
+    translation: list[float]
+    def __init__(self) -> None: ...
+
 class timestamp_domain:
     hardware_clock: ClassVar[timestamp_domain]
 
@@ -63,10 +84,13 @@ class stream_profile:
     def is_motion_stream_profile(self) -> bool: ...
     def as_video_stream_profile(self) -> video_stream_profile: ...
     def as_motion_stream_profile(self) -> motion_stream_profile: ...
+    def get_extrinsics_to(self, to: stream_profile) -> extrinsics: ...
+    def register_extrinsics_to(self, to: stream_profile, extrinsics: extrinsics) -> None: ...
 
 class video_stream_profile(stream_profile):
     def width(self) -> int: ...
     def height(self) -> int: ...
+    def get_intrinsics(self) -> intrinsics: ...
 
 class motion_stream_profile(stream_profile): ...
 
@@ -120,6 +144,7 @@ class video_stream:
     fps: int
     bpp: int
     fmt: _Format
+    intrinsics: intrinsics
     def __init__(self) -> None: ...
 
 class motion_stream:

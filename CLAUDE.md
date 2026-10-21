@@ -54,6 +54,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 | Command | Module | Purpose |
 |---|---|---|
 | `rs list` | `cli.py` | List connected devices |
+| `rs info` | `commands/info.py` | Device details (every camera info field); with profiles or `--all-profiles`, intrinsics and extrinsics |
 | `rs config list/get/set/restore` | `commands/config.py`, `restore.py` | Read/write sensor controls, restore defaults |
 | `rs stream list/play` | `commands/stream.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream |
 | `rs bag info` | `commands/bag.py` | Inspect ROS bag files |
@@ -67,6 +68,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 - Fields holding a sensor or stream name from a device are typed `str`, not the enum: a new camera's unknown names pass through unchanged. Enum members compare equal to their plain string.
 - `Option` — a control's range, step and default as `float`, with `vtype` `int` or `float`
 - `Profile` — `(stream, resolution, fps, format, index)`; CLI syntax: `depth-640x480-30-z16`
+- `Calibration` — `StreamIntrinsics` (an `Intrinsics` shared by a stream's profiles at one resolution) and `Extrinsics` between streams
 - `Frame` / `FrameSet` — single frame and `dict[str, Frame]` keyed by stream name
 
 ### Output

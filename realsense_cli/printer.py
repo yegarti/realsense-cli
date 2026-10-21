@@ -11,7 +11,7 @@ from rich.table import Table
 from realsense_cli.console import console
 from realsense_cli.rs_bag_parser import TopicInfo
 from realsense_cli.session import json_output
-from realsense_cli.types import DeviceInfo, Option, Profile, sensor_label
+from realsense_cli.types import Calibration, DeviceInfo, Option, Profile, sensor_label
 from realsense_cli.utils import group_profiles
 
 
@@ -51,6 +51,51 @@ def list_devices(devices: list[DeviceInfo]) -> None:
         sensors = "\n".join(map(sensor_label, dev.sensors))
         table.add_row(dev.name, dev.serial, dev.fw, dev.connection, sensors)
 
+    console.print(table)
+
+
+def device_details(
+    camera_info: dict[str, str], sensors: list[str], calibration: Calibration | None = None
+) -> None:
+    table = Table(title="Device", box=box.SIMPLE, show_header=False)
+    table.add_column()
+    table.add_column()
+    for name, value in camera_info.items():
+        table.add_row(name.replace("_", " ").title(), value)
+    table.add_row("Sensors", "\n".join(map(sensor_label, sensors)))
+    console.print(table)
+    if calibration is None:
+        return
+
+    # one table per group: a row per profile would be too wide for a terminal
+    for s in calibration.intrinsics:
+        intr = s.intrinsics
+        title = (
+            f"Intrinsics of {s.stream} {s.resolution} {'/'.join(s.formats)} "
+            f"@ {'/'.join(map(str, s.fps))} fps"
+        )
+        table = Table(title=title, box=box.SIMPLE, show_header=False)
+        table.add_column()
+        table.add_column()
+        table.add_row("Principal Point", f"{intr.ppx:g}, {intr.ppy:g}")
+        table.add_row("Focal Length", f"{intr.fx:g}, {intr.fy:g}")
+        table.add_row("Distortion", intr.model)
+        table.add_row("Coefficients", ", ".join(f"{c:g}" for c in intr.coeffs))
+        console.print(table)
+
+    if not calibration.extrinsics:
+        return
+    table = Table(title="Extrinsics", box=box.SIMPLE)
+    table.add_column("From")
+    table.add_column("To")
+    table.add_column("Rotation")
+    table.add_column("Translation (m)")
+    for e in calibration.extrinsics:
+        # column-major, printed as the 3x3 matrix it is
+        rotation = "\n".join(
+            "  ".join(f"{e.rotation[col * 3 + row]:g}" for col in range(3)) for row in range(3)
+        )
+        table.add_row(e.source, e.target, rotation, ", ".join(f"{t:g}" for t in e.translation))
     console.print(table)
 
 

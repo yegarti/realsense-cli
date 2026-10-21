@@ -7,6 +7,10 @@ pyrealsense2 calls as production. It produces no frames on its own: call
 `start_frame_pump()` to keep feeding them from a background thread.
 
 The last profile listed for each stream in a `SensorSpec` is that stream's default.
+
+A software device keeps extrinsics per profile, where a real device keeps them per stream: each
+stream's profiles are linked to each other, so extrinsics registered between two streams reach
+every profile of both.
 """
 
 import threading
@@ -17,7 +21,16 @@ from itertools import count
 
 import pyrealsense2 as rs
 
-from realsense_cli.types import DeviceInfo, Option, Profile, Resolution, Sensor, Stream
+from realsense_cli.types import (
+    DeviceInfo,
+    Extrinsics,
+    Intrinsics,
+    Option,
+    Profile,
+    Resolution,
+    Sensor,
+    Stream,
+)
 
 _BYTES_PER_PIXEL: dict[str, int] = {"z16": 2, "y8": 1, "rgb8": 3}
 
@@ -28,10 +41,21 @@ class SensorSpec:
     profiles: list[Profile]
     options: list[Option] = field(default_factory=list)
     read_only_options: dict[str, float] = field(default_factory=dict)
+    intrinsics: dict[str, Intrinsics] = field(default_factory=dict)  # keyed by stream name
 
 
 class SoftwareCamera:
-    def __init__(self, info: DeviceInfo, sensors: list[SensorSpec]):
+    def __init__(
+        self,
+        info: DeviceInfo,
+        sensors: list[SensorSpec],
+        camera_info: dict[str, str] | None = None,
+        extrinsics: list[Extrinsics] | None = None,
+    ):
+        """
+        CAMERA_INFO registers more camera info fields on top of those INFO holds, keyed by
+        their `rs.camera_info` name. EXTRINSICS are registered between the streams they name
+        """
         self.info = info
         self.device = rs.software_device()
         # pyrealsense2 < 2.55 pre-registers a name, and registering again appends to it
@@ -42,16 +66,26 @@ class SoftwareCamera:
         self.device.register_info(rs.camera_info.serial_number, info.serial)
         self.device.register_info(rs.camera_info.firmware_version, info.fw)
         self.device.register_info(rs.camera_info.usb_type_descriptor, info.connection)
+        for name, value in (camera_info or {}).items():
+            self.device.register_info(rs.camera_info.__members__[name], value)
 
         self._sensors: list[rs.software_sensor] = []
         self._frame_numbers = count()
         uid = count()
+        stream_profiles: dict[str, list[rs.stream_profile]] = {}
         for spec in sensors:
             sensor = self.device.add_sensor(spec.name)
             self._sensors.append(sensor)
             defaults = {p.stream: p for p in spec.profiles}
             for profile in spec.profiles:
-                _add_stream(sensor, profile, next(uid), defaults[profile.stream] is profile)
+                rs_profile = _add_stream(
+                    sensor,
+                    profile,
+                    next(uid),
+                    defaults[profile.stream] is profile,
+                    spec.intrinsics.get(profile.stream),
+                )
+                stream_profiles.setdefault(profile.stream, []).append(rs_profile)
             for option in spec.options:
                 rng = rs.option_range()
                 rng.min = option.min_value
@@ -61,6 +95,13 @@ class SoftwareCamera:
                 sensor.add_option(getattr(rs.option, option.name), rng, True)
             for name, value in spec.read_only_options.items():
                 sensor.add_read_only_option(getattr(rs.option, name), value)
+
+        for first, *others in stream_profiles.values():
+            for other in others:
+                first.register_extrinsics_to(other, _rs_extrinsics(_IDENTITY, (0, 0, 0)))
+        for ext in extrinsics or []:
+            source, target = stream_profiles[ext.source][0], stream_profiles[ext.target][0]
+            source.register_extrinsics_to(target, _rs_extrinsics(ext.rotation, ext.translation))
 
     def start_frame_pump(self, fps: int = 30) -> None:
         """Push frames to active streams at FPS from a daemon thread until exit."""
@@ -106,8 +147,12 @@ class SoftwareCamera:
 
 
 def _add_stream(
-    sensor: rs.software_sensor, profile: Profile, uid: int, is_default: bool
-) -> None:
+    sensor: rs.software_sensor,
+    profile: Profile,
+    uid: int,
+    is_default: bool,
+    intrinsics: Intrinsics | None,
+) -> rs.stream_profile:
     stream_type = getattr(rs.stream, profile.stream.split()[0].lower())
     index = max(profile.index, 0)
     fmt = getattr(rs.format, profile.format.lower())
@@ -118,15 +163,35 @@ def _add_stream(
         stream.width = profile.resolution.width
         stream.height = profile.resolution.height
         stream.bpp = _BYTES_PER_PIXEL[profile.format.lower()]
+        if intrinsics is not None:
+            stream.intrinsics = _rs_intrinsics(profile.resolution, intrinsics)
     stream.type = stream_type
     stream.index = index
     stream.uid = uid
     stream.fps = profile.fps
     stream.fmt = fmt
     if isinstance(stream, rs.motion_stream):
-        sensor.add_motion_stream(stream, is_default)
-    else:
-        sensor.add_video_stream(stream, is_default)
+        return sensor.add_motion_stream(stream, is_default)
+    return sensor.add_video_stream(stream, is_default)
+
+
+def _rs_intrinsics(resolution: Resolution, intrinsics: Intrinsics) -> rs.intrinsics:
+    rs_intrinsics = rs.intrinsics()
+    rs_intrinsics.width, rs_intrinsics.height = resolution
+    rs_intrinsics.ppx, rs_intrinsics.ppy = intrinsics.ppx, intrinsics.ppy
+    rs_intrinsics.fx, rs_intrinsics.fy = intrinsics.fx, intrinsics.fy
+    rs_intrinsics.model = rs.distortion.__members__[intrinsics.model]
+    rs_intrinsics.coeffs = list(intrinsics.coeffs)
+    return rs_intrinsics
+
+
+def _rs_extrinsics(
+    rotation: tuple[float, ...], translation: tuple[float, ...]
+) -> rs.extrinsics:
+    rs_extrinsics = rs.extrinsics()
+    rs_extrinsics.rotation = list(rotation)
+    rs_extrinsics.translation = list(translation)
+    return rs_extrinsics
 
 
 def _video(stream: str, fps: int, fmt: str, index: int = -1) -> Profile:
@@ -140,6 +205,17 @@ D435 = DeviceInfo(
     connection="3.2",
     sensors=[Sensor.STEREO_MODULE, Sensor.RGB_CAMERA, Sensor.MOTION_MODULE],
 )
+
+D435_CAMERA_INFO: dict[str, str] = {
+    "recommended_firmware_version": "5.16.0.1",
+    "physical_port": "/sys/devices/pci0000:00/usb2/2-1",
+    "product_id": "0B07",
+    "camera_locked": "YES",
+    "product_line": "D400",
+    "asic_serial_number": "123456789012",
+}
+
+_D435_DEPTH_INTRINSICS = Intrinsics(320.5, 240.25, 385.5, 385.75, "brown_conrady", (0,) * 5)
 
 D435_SENSORS: list[SensorSpec] = [
     SensorSpec(
@@ -156,11 +232,24 @@ D435_SENSORS: list[SensorSpec] = [
             Option("depth_units", "", 0.00001, 0.001, 0.00001, 0.001, float),
         ],
         read_only_options={"asic_temperature": 40.0},
+        intrinsics=dict.fromkeys(
+            (Stream.DEPTH, Stream.INFRARED, Stream.INFRARED2), _D435_DEPTH_INTRINSICS
+        ),
     ),
     SensorSpec(
         name=Sensor.RGB_CAMERA,
         profiles=[_video(Stream.COLOR, fps, "rgb8", 0) for fps in (6, 15, 30)],
         options=[Option("brightness", "", -64.0, 64.0, 1.0, 0.0, int)],
+        intrinsics={
+            Stream.COLOR: Intrinsics(
+                321.75,
+                243.5,
+                615.25,
+                615.5,
+                "inverse_brown_conrady",
+                (0.125, -0.25, 0.001, -0.0005, 0.0625),
+            )
+        },
     ),
     SensorSpec(
         name=Sensor.MOTION_MODULE,
@@ -172,8 +261,17 @@ D435_SENSORS: list[SensorSpec] = [
 ]
 
 
+_IDENTITY = (1, 0, 0, 0, 1, 0, 0, 0, 1)
+
+D435_EXTRINSICS: list[Extrinsics] = [
+    Extrinsics(Stream.DEPTH, Stream.INFRARED, _IDENTITY, (0, 0, 0)),
+    Extrinsics(Stream.DEPTH, Stream.INFRARED2, _IDENTITY, (-0.05, 0, 0)),
+    Extrinsics(Stream.DEPTH, Stream.COLOR, _IDENTITY, (0.0147, 0.0001, 0.0004)),
+]
+
+
 def d435() -> SoftwareCamera:
-    return SoftwareCamera(D435, D435_SENSORS)
+    return SoftwareCamera(D435, D435_SENSORS, D435_CAMERA_INFO, D435_EXTRINSICS)
 
 
 def d435_sensor(name: str) -> SensorSpec:
