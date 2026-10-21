@@ -1,18 +1,11 @@
-import json
-
 import pytest
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
 from realsense_cli.errors import InvalidProfile
+from tests.test_json import invoke_json, json_error
 
 runner = CliRunner()
-
-
-def invoke_json(*args: str) -> dict:
-    result = runner.invoke(app, ["--json", *args])
-    assert result.exit_code == 0, result.output
-    return json.loads(result.stdout)
 
 
 def test_info_lists_camera_info_and_sensors_without_calibration(driver):
@@ -45,7 +38,8 @@ DEPTH_INTRINSICS = {
     "ppx": 320.5,
     "ppy": 240.25,
     "fx": 385.5,
-    "fy": 385.75,
+    # float32 holds 385.12345 as 385.1234436...: 385.12344 is its shortest round-trip form
+    "fy": 385.12344,
     "model": "brown_conrady",
     "coeffs": [0.0, 0.0, 0.0, 0.0, 0.0],
 }
@@ -100,19 +94,13 @@ def test_all_profiles_covers_every_video_profile(driver):
     assert pairs["Infrared 2", "Color"]["translation"] == [0.0647, 0.0001, 0.0004]
 
 
-def json_error(result, exit_code: int) -> dict:
-    assert result.exit_code == exit_code, result.output
-    assert result.stdout == ""
-    return json.loads(result.stderr.splitlines()[-1])["error"]
-
-
 @pytest.mark.parametrize(
     ("profile", "message"),
     [
         ("depth-big", "Failed to parse profile 'depth-big'"),
         ("bogus", "Unknown stream 'bogus'"),
         ("depth-1280x720", "No video profile matches"),
-        ("gyro", "No video profile matches"),
+        ("gyro", "Video streams: Depth, Infrared 1, Infrared 2, Color"),
     ],
 )
 def test_invalid_profile_fails(driver, profile, message):

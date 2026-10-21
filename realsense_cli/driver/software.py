@@ -215,7 +215,7 @@ D435_CAMERA_INFO: dict[str, str] = {
     "asic_serial_number": "123456789012",
 }
 
-_D435_DEPTH_INTRINSICS = Intrinsics(320.5, 240.25, 385.5, 385.75, "brown_conrady", (0,) * 5)
+_D435_DEPTH_INTRINSICS = Intrinsics(320.5, 240.25, 385.5, 385.12345, "brown_conrady", (0,) * 5)
 
 D435_SENSORS: list[SensorSpec] = [
     SensorSpec(

@@ -1,3 +1,4 @@
+import struct
 import time
 from collections import defaultdict
 from itertools import permutations
@@ -38,10 +39,15 @@ _FRAME_QUEUE_CAPACITY = 32
 
 def _float32(value: float) -> float:
     """
-    VALUE, a float32 the SDK widened to a Python float, without the digits widening adds:
-    0.001 comes back from the SDK as 0.0010000000474974513
+    VALUE, a float32 the SDK widened to a Python float, as the shortest decimal that reads
+    back as the same float32: 0.001 comes back from the SDK as 0.0010000000474974513
     """
-    return float(f"{value:.7g}")
+    # a float32 round-trips through 9 significant digits, and often fewer
+    for digits in range(1, 9):
+        shorter = float(f"{value:.{digits}g}")
+        if struct.unpack("f", struct.pack("f", shorter))[0] == value:
+            return shorter
+    return float(f"{value:.9g}")
 
 
 def _intrinsics(rs_intrinsics: rs.intrinsics) -> Intrinsics:
@@ -383,10 +389,16 @@ class Realsense:
         if profiles is not None:
             for profile in profiles:
                 if not any(self._matches(p, profile) for p in rs_profiles):
+                    streams = ", ".join(dict.fromkeys(p.stream_name() for p in rs_profiles))
                     raise InvalidProfile(
-                        f"No video profile matches '{profile}'. {_PROFILES_HINT}"
+                        f"No video profile matches '{profile}'. Video streams: {streams}. "
+                        f"{_PROFILES_HINT}"
                     )
-            rs_profiles = [p for p in rs_profiles if any(self._matches(p, q) for q in profiles)]
+            rs_profiles = [
+                rs_profile
+                for rs_profile in rs_profiles
+                if any(self._matches(rs_profile, profile) for profile in profiles)
+            ]
 
         groups: dict[tuple, list[rs.video_stream_profile]] = defaultdict(list)
         for rs_profile in rs_profiles:

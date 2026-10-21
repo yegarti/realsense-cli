@@ -126,6 +126,13 @@ rs info depth-1280x720 color-0x0-30 # same partial syntax as `rs stream play`
 rs info --all-profiles              # every video profile
 ```
 ```
+Intrinsics of Depth 640x480 Z16 @ 6/15/30 fps
+
+  Principal Point       320.5, 240.25
+  Focal Length          385.5, 385.12344
+  Distortion            brown_conrady
+  Coefficients          0, 0, 0, 0, 0
+
       Intrinsics of Color 640x480 RGB8 @ 6/15/30 fps
 
   Principal Point   321.75, 243.5
@@ -133,11 +140,14 @@ rs info --all-profiles              # every video profile
   Distortion        inverse_brown_conrady
   Coefficients      0.125, -0.25, 0.001, -0.0005, 0.0625
 
-                Extrinsics
+                       Extrinsics
 
   From    To      Rotation   Translation (m)
- ──────────────────────────────────────────────
+ ──────────────────────────────────────────────────────
   Depth   Color   1  0  0    0.0147, 0.0001, 0.0004
+                  0  1  0
+                  0  0  1
+  Color   Depth   1  0  0    -0.0147, -0.0001, -0.0004
                   0  1  0
                   0  0  1
 ```

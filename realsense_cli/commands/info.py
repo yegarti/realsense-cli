@@ -52,28 +52,28 @@ def _calibration_payload(calibration: Calibration) -> dict[str, Any]:
     return {
         "intrinsics": [
             {
-                "stream": s.stream,
-                "index": s.index,
-                "width": s.resolution.width,
-                "height": s.resolution.height,
-                "formats": list(s.formats),
-                "fps": list(s.fps),
-                "ppx": s.intrinsics.ppx,
-                "ppy": s.intrinsics.ppy,
-                "fx": s.intrinsics.fx,
-                "fy": s.intrinsics.fy,
-                "model": s.intrinsics.model,
-                "coeffs": list(s.intrinsics.coeffs),
+                "stream": group.stream,
+                "index": group.index,
+                "width": group.resolution.width,
+                "height": group.resolution.height,
+                "formats": list(group.formats),
+                "fps": list(group.fps),
+                "ppx": group.intrinsics.ppx,
+                "ppy": group.intrinsics.ppy,
+                "fx": group.intrinsics.fx,
+                "fy": group.intrinsics.fy,
+                "model": group.intrinsics.model,
+                "coeffs": list(group.intrinsics.coeffs),
             }
-            for s in calibration.intrinsics
+            for group in calibration.intrinsics
         ],
         "extrinsics": [
             {
-                "from": e.source,
-                "to": e.target,
-                "rotation": list(e.rotation),
-                "translation": list(e.translation),
+                "from": ext.source,
+                "to": ext.target,
+                "rotation": list(ext.rotation),
+                "translation": list(ext.translation),
             }
-            for e in calibration.extrinsics
+            for ext in calibration.extrinsics
         ],
     }

@@ -1,6 +1,6 @@
 import json
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -68,19 +68,20 @@ def device_details(
         return
 
     # one table per group: a row per profile would be too wide for a terminal
-    for s in calibration.intrinsics:
-        intr = s.intrinsics
+    for group in calibration.intrinsics:
+        intr = group.intrinsics
         title = (
-            f"Intrinsics of {s.stream} {s.resolution} {'/'.join(s.formats)} "
-            f"@ {'/'.join(map(str, s.fps))} fps"
+            f"Intrinsics of {group.stream} {group.resolution} {'/'.join(group.formats)} "
+            f"@ {'/'.join(map(str, group.fps))} fps"
         )
-        table = Table(title=title, box=box.SIMPLE, show_header=False)
+        # Rich wraps a title wider than its table
+        table = Table(title=title, box=box.SIMPLE, show_header=False, min_width=len(title))
         table.add_column()
         table.add_column()
-        table.add_row("Principal Point", f"{intr.ppx:g}, {intr.ppy:g}")
-        table.add_row("Focal Length", f"{intr.fx:g}, {intr.fy:g}")
+        table.add_row("Principal Point", _numbers([intr.ppx, intr.ppy]))
+        table.add_row("Focal Length", _numbers([intr.fx, intr.fy]))
         table.add_row("Distortion", intr.model)
-        table.add_row("Coefficients", ", ".join(f"{c:g}" for c in intr.coeffs))
+        table.add_row("Coefficients", _numbers(intr.coeffs))
         console.print(table)
 
     if not calibration.extrinsics:
@@ -90,13 +91,16 @@ def device_details(
     table.add_column("To")
     table.add_column("Rotation")
     table.add_column("Translation (m)")
-    for e in calibration.extrinsics:
+    for ext in calibration.extrinsics:
         # column-major, printed as the 3x3 matrix it is
-        rotation = "\n".join(
-            "  ".join(f"{e.rotation[col * 3 + row]:g}" for col in range(3)) for row in range(3)
-        )
-        table.add_row(e.source, e.target, rotation, ", ".join(f"{t:g}" for t in e.translation))
+        rotation = "\n".join(_numbers(ext.rotation[row::3], sep="  ") for row in range(3))
+        table.add_row(ext.source, ext.target, rotation, _numbers(ext.translation))
     console.print(table)
+
+
+def _numbers(values: Iterable[float], sep: str = ", ") -> str:
+    # every digit the SDK's float32 holds: `:g` keeps only 6 of them
+    return sep.join(f"{v:.9g}" for v in values)
 
 
 def list_options(
