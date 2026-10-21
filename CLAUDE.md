@@ -55,7 +55,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 |---|---|---|
 | `rs list` | `cli.py` | List connected devices |
 | `rs config list/get/set/restore` | `commands/config.py`, `restore.py` | Read/write sensor controls, restore defaults |
-| `rs stream list/play` | `commands/stream.py` | List profiles or start live stream |
+| `rs stream list/play` | `commands/stream.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream |
 | `rs bag info` | `commands/bag.py` | Inspect ROS bag files |
 | `rs reset` | `cli.py` | Hardware reset |
 
@@ -79,7 +79,7 @@ Commands build their result as a plain dict and pass it to `printer.emit(ctx, pa
 
 ### Errors
 
-Raise an `RsCliError` subclass from `errors.py` (`DeviceNotFound`, `UnknownSensor`, `UnknownControl`, `InvalidProfile`, `InvalidValue`, `ConfirmationRequired`) for anything the user can fix; messages list the valid values. `RsCliGroup` in `cli.py` turns them into a one-line stderr message (a JSON `{"error": ...}` object under `--json`, click usage errors included) and the class's `exit_code` (documented in the README). Other exceptions print one line too, with the traceback only under `--verbose`.
+Raise an `RsCliError` subclass from `errors.py` (`DeviceNotFound`, `UnknownSensor`, `UnknownControl`, `InvalidProfile`, `InvalidValue`, `ConfirmationRequired`, `NoFrames`) for anything the user can fix; messages list the valid values. `RsCliGroup` in `cli.py` turns them into a one-line stderr message (a JSON `{"error": ...}` object under `--json`, click usage errors included) and the class's `exit_code` (documented in the README). Other exceptions print one line too, with the traceback only under `--verbose`.
 
 ## Code style
 

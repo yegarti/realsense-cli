@@ -1,3 +1,5 @@
+import time
+from contextlib import nullcontext
 from typing import Annotated
 
 import typer
@@ -5,12 +7,17 @@ from loguru import logger
 from rich.live import Live
 
 from realsense_cli.console import console, err_console
-from realsense_cli.printer import emit, list_profiles
+from realsense_cli.driver.base import DriverProtocol
+from realsense_cli.errors import NoFrames
+from realsense_cli.printer import emit, list_frame_counts, list_profiles
 from realsense_cli.session import json_output, require_device
 from realsense_cli.stream_view import StreamView
 from realsense_cli.types import _STREAM_ALIASES, Profile, resolve_sensor_name
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
+
+# Seconds a bounded run waits for a stream's next frame before failing
+FRAME_TIMEOUT = 3.0
 
 _STREAM_ALIASES_STR = ", ".join(_STREAM_ALIASES.keys())
 
@@ -62,6 +69,9 @@ def stream_list(
                     'color-640x480-0-rgb' - stream color at 640x480, any FPS, RGB format\n
                     \n
                     Stream aliases: {_STREAM_ALIASES_STR}\n
+                    Runs until Ctrl-C, or with --frames/--duration stops on its own and
+                    prints the frames received per stream. A stream that sends no
+                    frames for 3 seconds fails the run.\n
                     """,
 )
 def stream_play(
@@ -78,10 +88,26 @@ def stream_play(
         ),
     ] = True,
     metadata: Annotated[bool, typer.Option("--md/--no-md", help="Show stream metadata")] = True,
+    frames: Annotated[
+        int | None,
+        typer.Option(
+            "--frames",
+            min=1,
+            help="Stop once every stream received N frames",
+            show_default=False,
+        ),
+    ] = None,
+    duration: Annotated[
+        float | None,
+        typer.Option("--duration", help="Stop after S seconds", show_default=False),
+    ] = None,
 ):
-    if json_output(ctx):
+    if duration is not None and duration <= 0:
+        raise typer.BadParameter("must be more than 0 seconds", param_hint="'--duration'")
+    bounded = frames is not None or duration is not None
+    if json_output(ctx) and not bounded:
         raise typer.BadParameter(
-            "stream play runs until interrupted and has no JSON output yet",
+            "needs --frames or --duration: without them stream play runs until interrupted",
             param_hint="'--json'",
         )
     driver = require_device(ctx)
@@ -89,17 +115,88 @@ def stream_play(
     if not profiles:
         profiles = []
 
-    view = StreamView([profile.stream for profile in profiles], metadata=metadata)
-    driver.play(profiles, pipeline=api)
+    # the streams the device started, defaults included: frames are reported under these names
+    started = [profile.stream for profile in driver.play(profiles, pipeline=api)]
+    view = StreamView(started, metadata=metadata)
 
+    # the live view would corrupt the JSON on stdout
+    live = (
+        nullcontext()
+        if json_output(ctx)
+        else Live(view, console=console, refresh_per_second=30)
+    )
     try:
-        with Live(view, console=console, refresh_per_second=30):
-            while True:
-                frameset = driver.wait_for_frameset()
-                if frameset is None:
-                    logger.warning("Frames didn't arrive until timeout")
-                    continue
-                view.update(frameset)
+        with live:
+            if not bounded:
+                while True:
+                    frameset = driver.wait_for_frameset()
+                    if frameset is None:
+                        logger.warning("Frames didn't arrive until timeout")
+                        continue
+                    view.update(frameset)
+            counts = _count_frames(driver, view, started, frames, duration)
     finally:
         err_console.print("Stopping all streams")
         driver.stop()
+
+    missing = [stream for stream, n in counts.items() if n == 0]
+    if missing:
+        raise NoFrames(
+            f"No frames arrived from {', '.join(missing)}. {_received_summary(counts)}"
+        )
+    payload = {"streams": [{"stream": s, "frames": n} for s, n in counts.items()]}
+    emit(ctx, payload, lambda: list_frame_counts(counts))
+
+
+def _received_summary(counts: dict[str, int]) -> str:
+    received = ", ".join(f"{stream} {n}" for stream, n in counts.items()) or "none"
+    return f"Frames received: {received}"
+
+
+def _count_frames(
+    driver: DriverProtocol,
+    view: StreamView,
+    streams: list[str],
+    frames: int | None,
+    duration: float | None,
+) -> dict[str, int]:
+    """
+    New frames received per stream until each of STREAMS received FRAMES frames or DURATION
+    seconds passed. STREAMS start at 0, so a stream that got nothing still shows up. A stream
+    still short of FRAMES that sends nothing for FRAME_TIMEOUT seconds fails the run
+    """
+    counts = dict.fromkeys(streams, 0)
+    started = time.monotonic()
+    last_frame = dict.fromkeys(streams, started)
+    last_index: dict[str, int] = {}
+    deadline = None if duration is None else started + duration
+    while True:
+        now = time.monotonic()
+        if deadline is not None and now >= deadline:
+            break
+        waiting = [s for s in streams if frames is None or counts[s] < frames]
+        if not waiting:
+            break
+        stalled = [s for s in waiting if now - last_frame[s] >= FRAME_TIMEOUT]
+        if stalled:
+            raise NoFrames(
+                f"No frames arrived from {', '.join(stalled)} within {FRAME_TIMEOUT:g}s. "
+                f"{_received_summary(counts)}"
+            )
+        # wake up in time to notice the first stall, or the deadline
+        timeout = min(last_frame[s] for s in waiting) + FRAME_TIMEOUT - now
+        if deadline is not None:
+            timeout = min(timeout, deadline - now)
+        frameset = driver.wait_for_frameset(timeout)
+        if frameset is None:
+            continue
+        now = time.monotonic()
+        for stream, frame in frameset.items():
+            # the pipeline can hand out a slower stream's last frame again in later framesets
+            if last_index.get(stream) == frame.index:
+                continue
+            last_index[stream] = frame.index
+            counts[stream] = counts.get(stream, 0) + 1
+            last_frame[stream] = now
+        view.update(frameset)
+    return counts

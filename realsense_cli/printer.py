@@ -119,6 +119,15 @@ def list_restored(restored: list[dict[str, Any]], failed: list[dict[str, Any]]) 
         console.print(table)
 
 
+def list_frame_counts(counts: dict[str, int]) -> None:
+    table = Table(title="Frames received", box=box.SIMPLE)
+    table.add_column("Stream")
+    table.add_column("Frames", justify="right")
+    for stream, frames in counts.items():
+        table.add_row(stream, str(frames))
+    console.print(table)
+
+
 def list_profiles(profiles: list[Profile], title: str = "Streams"):
     table = Table(title=title, box=box.SIMPLE)
     table.add_column("Stream")

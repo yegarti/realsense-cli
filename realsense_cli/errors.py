@@ -47,3 +47,7 @@ class InvalidValue(RsCliError):
 
 class ConfirmationRequired(RsCliError):
     exit_code = 8
+
+
+class NoFrames(RsCliError):
+    exit_code = 9

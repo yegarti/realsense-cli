@@ -198,6 +198,27 @@ rs stream play depth-640x480-30 color-0x0-15
 
 Hide metadata with `--no-md`. Switch to the low-level sensor API with `--sensor`.
 
+**Bounded run** — a smoke check that frames arrive. `--frames N` stops once every stream received
+N frames, `--duration S` after S seconds; given both, whichever comes first. The run then prints
+the frames received per stream:
+```sh
+rs stream play depth color --frames 100
+rs --json stream play --duration 5
+```
+```
+ Frames received
+  Stream   Frames
+ ────────────────
+  Depth       100
+  Color       100
+```
+
+The streams checked are the ones the device started, so without profiles every default stream
+counts. A stream that received no frames fails the run with exit code `9`, as does a stream that
+sends nothing for 3 seconds before it has its N frames (or, with `--duration`, before the time
+is up). Frames are counted by frame number: when the pipeline hands out a slower stream's last
+frame again in a later frameset, it counts once.
+
 ---
 
 ### `rs bag` — ROS bag inspection
@@ -249,10 +270,13 @@ parsers.
 | `rs config get` / `set` | `{"sensor", "values": {"<control>": <value>}}`; `set` returns the values read back from the device |
 | `rs config restore` | `{"restored": [{"sensor", "control", "old", "new"}], "failed": [{"sensor", "control", "error"}]}`; only the controls whose value changed. `failed` is only filled with `--keep-going`, which then prints the result on stdout and exits `7` |
 | `rs stream list` | `{"profiles": [{"sensor", "stream", "width", "height", "fps", "format", "index"}]}` |
+| `rs stream play --frames N` / `--duration S` | `{"streams": [{"stream", "frames"}]}` |
 | `rs bag info BAG` | `{"path", "duration", "topics": [{"name", "messages", "type"}]}` |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
-`rs stream play` runs until interrupted and rejects `--json` with exit code `2`.
+`rs stream play` needs `--frames` or `--duration` under `--json`; without them it runs until
+interrupted and fails with exit code `2`. Under `--json` the live view is off, so stdout holds
+only the summary.
 
 With `--json`, an error is a JSON object on the last line of stderr (warnings such as the
 multiple-devices notice may come before it), stdout stays empty, and the exit code is the same as
@@ -279,4 +303,5 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `6` | Invalid or unsupported stream profile |
 | `7` | Invalid control value, or a control that failed to write during `rs config restore` |
 | `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
+| `9` | A stream in a bounded `rs stream play` received no frames, or stopped sending them for 3 seconds |
 | `130` | Interrupted (Ctrl+C) |
