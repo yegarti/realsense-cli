@@ -11,6 +11,7 @@ The last profile listed for each stream in a `SensorSpec` is that stream's defau
 
 import threading
 import time
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from itertools import count
 
@@ -71,12 +72,17 @@ class SoftwareCamera:
 
         threading.Thread(target=pump, name="software-camera-pump", daemon=True).start()
 
-    def push_frames(self) -> None:
-        """Push one frame to every stream currently started on the device."""
+    def push_frames(self, streams: Collection[str] | None = None) -> None:
+        """
+        Push one frame to every stream currently started on the device, or only to those
+        named in STREAMS
+        """
         frame_number = next(self._frame_numbers)
         timestamp = frame_number * 1000 / 30
         for sensor in self._sensors:
             for profile in sensor.get_active_streams():
+                if streams is not None and profile.stream_name() not in streams:
+                    continue
                 if profile.is_motion_stream_profile():
                     motion = rs.software_motion_frame()
                     motion.data = rs.vector()

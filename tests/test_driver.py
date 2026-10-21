@@ -85,6 +85,27 @@ def test_stream_motion(driver, camera):
         driver.stop()
 
 
+def test_frames_from_several_sensors_all_arrive(driver, camera):
+    depth, color = STEREO.profiles[0], d435_sensor("RGB Camera").profiles[0]
+    driver.play([depth, color], pipeline=False)
+    try:
+        camera.push_frames()
+        streams = set()
+        while (frameset := driver.wait_for_frameset(timeout=0.05)) is not None:
+            streams.update(frameset)
+        assert streams == {"Depth", "Color"}
+    finally:
+        driver.stop()
+
+
+def test_wait_for_frameset_times_out(driver):
+    driver.play([STEREO.profiles[0]], pipeline=False)
+    try:
+        assert driver.wait_for_frameset(timeout=0.05) is None
+    finally:
+        driver.stop()
+
+
 def test_play_without_profiles_streams_defaults(driver, camera):
     driver.play()
     try:

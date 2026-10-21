@@ -26,6 +26,10 @@ from realsense_cli.utils import find_origin_sensor
 
 _PROFILES_HINT = "Run `rs stream list` to see the supported profiles"
 
+# Frames waiting for `wait_for_frameset`. Sensors deliver into one queue, which drops frames
+# once full: a capacity of 1 starves every sensor but the last to deliver
+_FRAME_QUEUE_CAPACITY = 32
+
 
 class Realsense:
     """
@@ -66,7 +70,7 @@ class Realsense:
         self._streaming = False
         self._pipeline: rs.pipeline = rs.pipeline(self._ctx)
         self._pipe_profile: rs.pipeline_profile | None = None
-        self._frame_queue: rs.frame_queue = rs.frame_queue(capacity=1)
+        self._frame_queue: rs.frame_queue = rs.frame_queue(capacity=_FRAME_QUEUE_CAPACITY)
 
     def _setup(self) -> None:
         self._query()
@@ -353,12 +357,9 @@ class Realsense:
         return None when no frameset arrive after timeout
         """
         result: FrameSet = {}
-        try:
-            rs_frame: rs.frame = self._frame_queue.wait_for_frame(int(timeout * 1000))
-        except RuntimeError as e:
-            if "Frame didn't arrive within" in str(e):
-                return None
-            raise
+        arrived, rs_frame = self._frame_queue.try_wait_for_frame(int(timeout * 1000))
+        if not arrived:
+            return None
         frames: list[rs.frame]
         if rs_frame.is_frameset():
             frames = [f for f in rs_frame.as_frameset()]

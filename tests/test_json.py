@@ -160,6 +160,8 @@ def test_stream_play_rejected_before_streaming(driver):
     result = runner.invoke(app, ["--json", "stream", "play", "depth"])
     error = json_error(result, 2)
     assert "--json" in error["message"]
+    assert "--frames" in error["message"]
+    assert "--duration" in error["message"]
 
 
 def test_unexpected_error(driver, monkeypatch):
