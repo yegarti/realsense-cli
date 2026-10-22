@@ -70,3 +70,15 @@ def test_capture_defaults(camera_driver, tmp_path):
         assert color.mode == "RGB"
         [profile] = [p for p in sidecar["profiles"] if p["stream"] == "Depth"]
         assert depth.size == (profile["width"], profile["height"])
+
+
+def test_config_get_all_while_idle(camera_driver):
+    """
+    A real D400 lists its temperature controls but can't read them while idle, which the
+    software device can't imitate
+    """
+    result = runner.invoke(app, ["--json", "config", "get", "depth", "--all"])
+    assert result.exit_code == 0, result.output
+    values = json.loads(result.stdout)
+    assert values["values"]["exposure"] > 0
+    assert set(values["unavailable"]).isdisjoint(values["values"])

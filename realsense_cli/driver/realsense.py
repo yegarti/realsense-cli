@@ -8,6 +8,7 @@ from loguru import logger
 
 from realsense_cli.driver.reconnect import ReconnectWatch, reset_and_wait
 from realsense_cli.errors import (
+    ControlUnavailable,
     DeviceNotFound,
     InvalidProfile,
     InvalidValue,
@@ -227,6 +228,9 @@ class Realsense:
         logger.info("querying controls {} for sensor {}", controls, rs_sensor)
         for control in controls:
             option = self._get_option(rs_sensor, sensor, control)
+            # A listed option the sensor can't read right now, e.g. a temperature while idle
+            if not rs_sensor.supports(option):
+                raise ControlUnavailable(control, sensor)
             logger.debug('getting value for option: "{}"', option)
             res[control] = rs_sensor.get_option(option)
             logger.debug('"{}" value: {}', option, res[control])
@@ -586,10 +590,12 @@ class Realsense:
 
     @staticmethod
     def _get_option(rs_sensor: rs.sensor, sensor: str, control: str) -> rs.option:
+        # By the listed options, not `supports()`: that is false for an option the sensor
+        # lists but can't read right now
+        supported = rs_sensor.get_supported_options()
         option = rs.option.__members__.get(control)
-        if option is None or not rs_sensor.supports(option):
-            supported = sorted(o.name for o in rs_sensor.get_supported_options())
-            raise UnknownControl(control, sensor, supported)
+        if option is None or option not in supported:
+            raise UnknownControl(control, sensor, sorted(o.name for o in supported))
         return option
 
     def _get_rs_stream(self, stream: str) -> rs.stream:

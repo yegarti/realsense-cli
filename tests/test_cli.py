@@ -86,6 +86,14 @@ def test_config_list_shows_read_only(driver):
     assert "yes" in line
 
 
+def test_config_get_all_shows_unreadable_controls(idle_driver):
+    result = runner.invoke(app, ["config", "get", "depth", "--all"])
+    assert result.exit_code == 0, result.output
+    line = next(line for line in result.stdout.splitlines() if "asic_temperature" in line)
+    assert "unavailable" in line
+    assert "8500.0" in result.stdout
+
+
 def test_config_set_read_only(driver):
     result = runner.invoke(app, ["config", "set", "depth", "asic_temperature=50"])
     assert result.exit_code == 7

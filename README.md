@@ -207,6 +207,9 @@ rs config set depth exposure=15000 laser_power=120
 ```sh
 rs config get depth --all
 ```
+Some read-only controls, such as `asic_temperature` and `projector_temperature` on a D400 camera,
+can only be read while the camera is streaming. `--all` shows them as `unavailable` and reads the
+rest; naming one explicitly fails with exit code `10`.
 
 **Restore controls to their defaults:**
 ```sh
@@ -401,7 +404,8 @@ parsers.
 | `rs info` | `{"device": {"<camera_info>": "<value>"}, "sensors": [...]}`: every camera info field the device supports and doesn't report as `unknown`, keyed by its `rs.camera_info` name (`name`, `serial_number`, `firmware_version`, `connection_type`, `product_id`, ...) |
 | `rs info PROFILES...` / `--all-profiles` | also `"intrinsics": [{"stream", "index", "width", "height", "formats": [...], "fps": [...], "ppx", "ppy", "fx", "fy", "model", "coeffs": [...]}]`, with `ppx` to `coeffs` `null` for profiles the SDK has no intrinsics for, and `"extrinsics": [{"from", "to", "rotation": [9 values, column-major], "translation": [x, y, z] in meters}]` |
 | `rs config list SENSOR` | `{"sensor", "controls": [{"name", "description", "min_value", "max_value", "step", "default_value", "vtype": "int" \| "float", "read_only"}]}` |
-| `rs config get` / `set` | `{"sensor", "values": {"<control>": <value>}}`; `set` returns the values read back from the device |
+| `rs config get` | `{"sensor", "values": {"<control>": <value>}, "unavailable": [...]}`; `unavailable` lists the controls `--all` skipped because the camera can't read them right now (empty otherwise) |
+| `rs config set` | `{"sensor", "values": {"<control>": <value>}}`: the values read back from the device |
 | `rs config restore` | `{"restored": [{"sensor", "control", "old", "new"}], "failed": [{"sensor", "control", "error"}]}`; only the controls whose value changed. `failed` is only filled with `--keep-going`, which then prints the result on stdout and exits `7` |
 | `rs stream list` | `{"profiles": [{"sensor", "stream", "width", "height", "fps", "format", "index"}]}` |
 | `rs stream play --frames N` / `--duration S` | `{"streams": [{"stream", "frames"}]}` |
@@ -439,4 +443,5 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `7` | Invalid control value, a control that failed to write during `rs config restore`, or an `rs capture` output directory that isn't empty |
 | `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
 | `9` | A stream in a bounded `rs stream play` or `rs capture` received no frames, or stopped sending them for 3 seconds |
+| `10` | A control the sensor lists but can't read right now (e.g. a temperature while not streaming) |
 | `130` | Interrupted (Ctrl+C) |

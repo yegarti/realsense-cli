@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 from realsense_cli.cli import app
 from realsense_cli.driver.realsense import Realsense
 from realsense_cli.driver.software import D435, d435_sensor
-from realsense_cli.errors import InvalidValue, UnknownSensor
+from realsense_cli.errors import ControlUnavailable, InvalidValue, UnknownSensor
 
 runner = CliRunner()
 
@@ -70,6 +70,7 @@ def test_config_get(driver):
     assert result == {
         "sensor": "Stereo Module",
         "values": {"exposure": 8500.0, "laser_power": 150.0},
+        "unavailable": [],
     }
 
 
@@ -77,6 +78,21 @@ def test_config_get_all(driver):
     result = invoke_json("config", "get", "depth", "--all")
     for option in STEREO.options:
         assert result["values"][option.name] == pytest.approx(option.default_value)
+    assert result["values"]["asic_temperature"] == pytest.approx(40.0)
+    assert result["unavailable"] == []
+
+
+def test_config_get_all_reports_unreadable_controls(idle_driver):
+    result = invoke_json("config", "get", "depth", "--all")
+    assert result["unavailable"] == ["asic_temperature"]
+    assert "asic_temperature" not in result["values"]
+    assert result["values"]["exposure"] == pytest.approx(8500.0)
+
+
+def test_config_get_unreadable_control(idle_driver):
+    result = runner.invoke(app, ["--json", "config", "get", "depth", "asic_temperature"])
+    error = json_error(result, ControlUnavailable.exit_code)
+    assert "asic_temperature" in error["message"]
 
 
 def test_config_set_reads_back(driver):

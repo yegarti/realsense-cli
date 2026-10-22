@@ -5,6 +5,7 @@ from realsense_cli.cli import app
 from realsense_cli.driver.realsense import Realsense
 from realsense_cli.driver.software import D435
 from realsense_cli.errors import (
+    ControlUnavailable,
     DeviceNotFound,
     InvalidProfile,
     InvalidValue,
@@ -35,6 +36,7 @@ def test_exit_codes_are_distinct():
         UnknownControl,
         InvalidProfile,
         InvalidValue,
+        ControlUnavailable,
     ]
     codes = [e.exit_code for e in errors]
     assert len(set(codes)) == len(codes)
@@ -61,6 +63,11 @@ def test_config_set_unknown_control(driver):
 def test_config_restore_unknown_control(driver):
     result = runner.invoke(app, ["config", "restore", "depth", "bogus"])
     assert_error(result, UnknownControl, "bogus", "exposure", "asic_temperature")
+
+
+def test_config_get_unreadable_control(idle_driver):
+    result = runner.invoke(app, ["config", "get", "depth", "asic_temperature"])
+    assert_error(result, ControlUnavailable, "asic_temperature", "can't be read right now")
 
 
 @pytest.mark.parametrize(
