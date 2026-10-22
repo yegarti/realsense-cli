@@ -1,6 +1,7 @@
 import random
 from dataclasses import replace
 
+import pyrealsense2 as rs
 import pytest
 from loguru import logger
 from rosbags.rosbag1 import Writer
@@ -52,6 +53,49 @@ def make_driver(inject_driver):
         return inject_driver(Realsense(devices=[camera.device]))
 
     return make
+
+
+class _UnreadableOptions:
+    """
+    An `rs.sensor` that lists OPTIONS but can't read them, as a real camera does with its
+    temperatures while idle: `supports()` is false and `get_option()` raises
+    """
+
+    def __init__(self, sensor: rs.sensor, options: set[str]):
+        self._sensor = sensor
+        self._options = options
+
+    def supports(self, option) -> bool:
+        return option.name not in self._options and self._sensor.supports(option)
+
+    def get_option(self, option: rs.option) -> float:
+        if option.name in self._options:
+            raise RuntimeError(f"object doesn't support option {option}")
+        return self._sensor.get_option(option)
+
+    def __getattr__(self, name: str):
+        return getattr(self._sensor, name)
+
+
+class _DeviceWithUnreadableOptions:
+    """An `rs.device` whose sensors can't read OPTIONS, which they still list"""
+
+    def __init__(self, device: rs.device, options: set[str]):
+        self._device = device
+        self.sensors = [_UnreadableOptions(s, options) for s in device.sensors]
+
+    def __getattr__(self, name: str):
+        return getattr(self._device, name)
+
+
+@pytest.fixture
+def idle_driver(camera, inject_driver) -> Realsense:
+    """
+    The driver over the simulated camera, which lists `asic_temperature` but can't read it, as
+    a real camera does while idle
+    """
+    device = _DeviceWithUnreadableOptions(camera.device, {"asic_temperature"})
+    return inject_driver(Realsense(devices=[device]))
 
 
 @pytest.fixture

@@ -51,3 +51,15 @@ class ConfirmationRequired(RsCliError):
 
 class NoFrames(RsCliError):
     exit_code = 9
+
+
+class ControlUnavailable(RsCliError):
+    """A control the sensor lists but can't read right now, e.g. a temperature while idle"""
+
+    exit_code = 10
+
+    def __init__(self, control: str, sensor: str):
+        super().__init__(
+            f"Control '{control}' on '{sensor}' can't be read right now; "
+            "the camera may report it only while streaming"
+        )

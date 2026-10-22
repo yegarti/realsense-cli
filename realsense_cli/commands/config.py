@@ -3,7 +3,8 @@ from typing import Annotated
 
 import typer
 
-from realsense_cli.errors import InvalidValue
+from realsense_cli.driver.base import DriverProtocol
+from realsense_cli.errors import ControlUnavailable, InvalidValue
 from realsense_cli.printer import emit, list_options, list_options_values, list_restored
 from realsense_cli.restore import restore_controls
 from realsense_cli.session import require_device
@@ -49,16 +50,21 @@ def config_get(
 ):
     driver = require_device(ctx)
     resolved = resolve_sensor_name(sensor)
-    if not controls and not all_controls:
+    if all_controls:
+        controls = [opt.name for opt in driver.list_controls(resolved)]
+        values, unavailable = _read_available(driver, resolved, controls)
+    elif controls:
+        values, unavailable = driver.get_control_values(resolved, controls), []
+    else:
         raise typer.BadParameter(
             "Specify control names or use --all to query all controls.",
             param_hint="'CONTROLS...'",
         )
-    if not controls:
-        controls = []
-    if all_controls:
-        controls = [opt.name for opt in driver.list_controls(resolved)]
-    _emit_values(ctx, resolved, driver.get_control_values(resolved, controls))
+    emit(
+        ctx,
+        {"sensor": resolved, "values": values, "unavailable": unavailable},
+        lambda: list_options_values({c: values.get(c, "unavailable") for c in controls}),
+    )
 
 
 @config_app.command(name="set", help="Set controls for given SENSOR")
@@ -120,6 +126,21 @@ def config_restore(
     )
     if failed:
         raise typer.Exit(InvalidValue.exit_code)
+
+
+def _read_available(
+    driver: DriverProtocol, sensor: str, controls: list[str]
+) -> tuple[dict[str, float], list[str]]:
+    """
+    Values of the CONTROLS the sensor can read right now, and the names of those it can't
+    """
+    values, unavailable = {}, []
+    for control in controls:
+        try:
+            values |= driver.get_control_values(sensor, [control])
+        except ControlUnavailable:
+            unavailable.append(control)
+    return values, unavailable
 
 
 def _emit_values(ctx: typer.Context, sensor: str, values: dict[str, float]) -> None:

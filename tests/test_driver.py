@@ -2,7 +2,13 @@ import pytest
 
 from realsense_cli.driver.realsense import Realsense
 from realsense_cli.driver.software import D435, SensorSpec, SoftwareCamera, d435_sensor
-from realsense_cli.errors import DeviceNotFound, InvalidProfile, InvalidValue, UnknownControl
+from realsense_cli.errors import (
+    ControlUnavailable,
+    DeviceNotFound,
+    InvalidProfile,
+    InvalidValue,
+    UnknownControl,
+)
 
 STEREO = d435_sensor("Stereo Module")
 
@@ -64,6 +70,12 @@ def test_set_control_values(driver):
 def test_get_unsupported_control(driver):
     with pytest.raises(UnknownControl, match="not supported"):
         driver.get_control_values(STEREO.name, ["gain"])
+
+
+def test_get_unreadable_control(idle_driver):
+    assert "asic_temperature" in {opt.name for opt in idle_driver.list_controls(STEREO.name)}
+    with pytest.raises(ControlUnavailable, match="asic_temperature"):
+        idle_driver.get_control_values(STEREO.name, ["exposure", "asic_temperature"])
 
 
 def test_list_streams(driver):
