@@ -6,6 +6,7 @@ Run with `just test -m hardware`.
 import json
 
 import pytest
+from PIL import Image
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
@@ -50,3 +51,22 @@ def test_info_all_profiles(camera_driver):
     streams = {group["stream"] for group in info["intrinsics"]}
     pairs = {(ext["from"], ext["to"]) for ext in info["extrinsics"]}
     assert pairs == {(a, b) for a in streams for b in streams if a != b}
+
+
+def test_capture_defaults(camera_driver, tmp_path):
+    """
+    The pipeline picks the profiles and delivers synchronized framesets, which the software
+    device, streaming through the sensor API, can't
+    """
+    out = tmp_path / "capture"
+    result = runner.invoke(app, ["--json", "capture", "--frames", "2", "-o", str(out)])
+    assert result.exit_code == 0, result.output
+    assert len(json.loads(result.stdout)["files"]) == 7
+    sidecar = json.loads((out / "capture.json").read_text())
+    assert sidecar["depth_scale"] > 0
+    assert {p["stream"] for p in sidecar["profiles"]} == {"Depth", "Color"}
+    with Image.open(out / "depth-1.png") as depth, Image.open(out / "color-1.png") as color:
+        assert depth.mode == "I;16"
+        assert color.mode == "RGB"
+        [profile] = [p for p in sidecar["profiles"] if p["stream"] == "Depth"]
+        assert depth.size == (profile["width"], profile["height"])

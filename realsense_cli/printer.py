@@ -254,6 +254,12 @@ def list_frame_counts(counts: dict[str, int]) -> None:
     console.print(table)
 
 
+def list_paths(paths: list[str]) -> None:
+    # one per line and unwrapped, so they can be piped or copied
+    for path in paths:
+        console.print(path, soft_wrap=True, highlight=False, markup=False)
+
+
 def list_profiles(profiles: list[Profile], title: str = "Streams"):
     table = Table(title=title, box=box.SIMPLE)
     table.add_column("Stream")

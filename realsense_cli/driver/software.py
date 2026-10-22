@@ -32,7 +32,7 @@ from realsense_cli.types import (
     Stream,
 )
 
-_BYTES_PER_PIXEL: dict[str, int] = {"z16": 2, "y8": 1, "rgb8": 3}
+_BYTES_PER_PIXEL: dict[str, int] = {"z16": 2, "y8": 1, "rgb8": 3, "bgr8": 3}
 
 
 @dataclass
@@ -136,7 +136,9 @@ class SoftwareCamera:
                     vsp = profile.as_video_stream_profile()
                     bpp = _BYTES_PER_PIXEL[vsp.format().name]
                     video = rs.software_video_frame()
-                    video.pixels = bytearray(vsp.width() * vsp.height() * bpp)
+                    video.pixels = bytearray(
+                        pixels(vsp.width() * vsp.height() * bpp, frame_number)
+                    )
                     video.bpp = bpp
                     video.stride = vsp.width() * bpp
                     video.profile = vsp
@@ -144,6 +146,19 @@ class SoftwareCamera:
                     video.timestamp = timestamp
                     video.domain = rs.timestamp_domain.hardware_clock
                     sensor.on_video_frame(video)
+
+
+_BYTE_RAMP = bytes(range(256))
+
+
+def pixels(size: int, frame_number: int) -> bytes:
+    """
+    The SIZE bytes of pixel data pushed in frame FRAME_NUMBER: a ramp of byte values that
+    starts one higher in each frame
+    """
+    start = frame_number % 256
+    ramp = _BYTE_RAMP * (size // 256 + 2)
+    return ramp[start : start + size]
 
 
 def _add_stream(

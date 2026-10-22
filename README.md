@@ -14,6 +14,7 @@
 - **Show** a device's details and calibration (intrinsics, extrinsics)
 - **Configure** sensor controls (exposure, gain, laser power, etc.)
 - **Stream** selected profiles and monitor live FPS per stream
+- **Capture** framesets to PNG files with a JSON sidecar, to look at afterwards
 - **Inspect** ROS1 bag files without a full ROS installation
 - Multi-device support via `--serial`
 
@@ -304,6 +305,54 @@ frame again in a later frameset, it counts once.
 
 ---
 
+### `rs capture` — save framesets to files
+
+A capture streams, discards the frames of the first second so auto-exposure settles, then saves
+a frameset to PNG files that a person or an agent can open afterwards:
+```sh
+rs capture                                 # default depth and color profiles
+rs capture depth infrared color --frames 5 # 5 framesets of three streams
+rs capture color-1280x720-30 -o shots      # into ./shots
+rs capture --warmup 3                      # let auto-exposure settle for 3 seconds
+```
+```
+/home/me/rs-capture-20261021-143005/depth-0.png
+/home/me/rs-capture-20261021-143005/depth-0-colorized.png
+/home/me/rs-capture-20261021-143005/color-0.png
+/home/me/rs-capture-20261021-143005/capture.json
+```
+
+Profiles take the `rs stream play` syntax. A profile that leaves the format unset is captured in
+Z16 for depth, Y8 for infrared and RGB8 for color; Y16, BGR8, RGBA8 and BGRA8 can be asked for.
+Each stream gets a file per frameset, named after its alias and the frameset's number, padded so
+the files sort in order (`depth-00.png` to `depth-11.png` for `--frames 12`):
+
+| Stream | Files |
+|---|---|
+| Depth | `depth-N.png`, a 16-bit grayscale PNG of the raw depth values (multiply by the depth scale for meters), and `depth-N-colorized.png`, colorized by the SDK for viewing |
+| Infrared, color | `infrared-N.png`, `infrared2-N.png`, `color-N.png`, 8-bit grayscale or RGB(A) |
+
+`capture.json` describes the capture, with file names relative to its directory:
+```json
+{
+  "device": {"name": "Intel RealSense D435", "serial": "012345678"},
+  "depth_scale": 0.001,
+  "profiles": [{"stream": "Depth", "width": 640, "height": 480, "fps": 30, "format": "Z16", "index": 0}],
+  "framesets": [
+    {"frames": [{"stream": "Depth", "frame_number": 6, "timestamp": 200.0,
+                 "metadata": {"actual_fps": 30000}, "files": ["depth-0.png", "depth-0-colorized.png"]}]}
+  ]
+}
+```
+
+`depth_scale` is `null` on a device without a depth sensor. The output directory (`-o`) must be
+new or empty unless `--force` is given, which overwrites files of the same name and leaves the
+others. The default, `./rs-capture-<timestamp>`, is always new: a capture in the same second gets
+`-2`, `-3`, ... appended. A stream that sends no frames for 3 seconds before the
+last frameset is complete fails the capture with exit code `9`, and nothing is written.
+
+---
+
 ### `rs bag` — ROS bag inspection
 
 ```sh
@@ -356,6 +405,7 @@ parsers.
 | `rs config restore` | `{"restored": [{"sensor", "control", "old", "new"}], "failed": [{"sensor", "control", "error"}]}`; only the controls whose value changed. `failed` is only filled with `--keep-going`, which then prints the result on stdout and exits `7` |
 | `rs stream list` | `{"profiles": [{"sensor", "stream", "width", "height", "fps", "format", "index"}]}` |
 | `rs stream play --frames N` / `--duration S` | `{"streams": [{"stream", "frames"}]}` |
+| `rs capture` | `{"directory", "files": [...]}`: absolute paths of the files written, `capture.json` last |
 | `rs bag info BAG` | `{"path", "duration", "topics": [{"name", "messages", "type"}]}` |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
@@ -385,8 +435,8 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `3` | No device connected, none matches `--serial`, or a reset device didn't reconnect |
 | `4` | Unknown sensor |
 | `5` | Unknown control |
-| `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile) |
-| `7` | Invalid control value, or a control that failed to write during `rs config restore` |
+| `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile; for `rs capture`, a stream or format it can't save as PNG) |
+| `7` | Invalid control value, a control that failed to write during `rs config restore`, or an `rs capture` output directory that isn't empty |
 | `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
-| `9` | A stream in a bounded `rs stream play` received no frames, or stopped sending them for 3 seconds |
+| `9` | A stream in a bounded `rs stream play` or `rs capture` received no frames, or stopped sending them for 3 seconds |
 | `130` | Interrupted (Ctrl+C) |

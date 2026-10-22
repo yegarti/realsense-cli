@@ -205,12 +205,28 @@ class Calibration:
     extrinsics: list[Extrinsics]
 
 
+@dataclass(frozen=True)
+class Image:
+    """
+    A video frame's pixels: HEIGHT rows of WIDTH pixels in FORMAT (an `rs.format` name), packed
+    with no padding between rows
+    """
+
+    width: int
+    height: int
+    format: str
+    data: bytes
+
+
 @dataclass
 class Frame:
     profile: Profile
     timestamp: float
     index: int
     metadata: dict[str, int]
+    # only when asked for: copying the pixels out of every frame costs time
+    image: Image | None = None
+    colorized: Image | None = None  # a depth frame's image as the SDK colorizes it
 
 
 FrameSet = dict[str, Frame]  # keyed by stream name
