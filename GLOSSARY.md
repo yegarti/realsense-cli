@@ -73,7 +73,12 @@ _Avoid_: Snapshot
 **Capture**:
 A bounded run that saves its framesets to files on disk after a warm-up, so they can be opened
 afterwards.
-_Avoid_: Snapshot, grab, record (a recording is a `.bag` file)
+_Avoid_: Snapshot, grab, record (a recording is a `.db3` file)
+
+**Recording**:
+A file holding a run's frames together with the device's details (camera info, profiles,
+calibration and control values), in the rosbag2 `.db3` format (`rs bag`).
+_Avoid_: Bag file (alone), `.bag` file, capture
 
 **File format**:
 How a capture writes each frame to disk: PNG to look at, NPY to load as an array, or raw
