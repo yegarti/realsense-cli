@@ -43,10 +43,19 @@ A named built-in tuning of the depth sensor, e.g. High Accuracy, set as the `vis
 control.
 _Avoid_: Preset (alone)
 
+**Advanced mode**:
+A device state that unlocks preset files and the depth sensor's advanced parameters. It
+persists across power cycles, and turning it on or off resets the device.
+
 **Preset file**:
 An advanced-mode JSON file holding many depth parameters at once, loaded into or saved from a
 device.
 _Avoid_: Preset (alone), config file
+
+**Preset key**:
+One entry in a preset file, named as the SDK writes it, e.g. `controls-laserpower`. Some set a
+control, others an advanced-mode setting.
+_Avoid_: Parameter
 
 ## Runs
 
