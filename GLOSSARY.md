@@ -44,17 +44,23 @@ control.
 _Avoid_: Preset (alone)
 
 **Advanced mode**:
-A device state that unlocks preset files and the depth sensor's advanced parameters. It
-persists across power cycles, and turning it on or off resets the device.
+A device state that unlocks preset files and advanced controls. It persists across power
+cycles, and turning it on or off resets the device.
+
+**Advanced control**:
+One depth tuning value in an advanced-mode group, e.g. the RSM group's diff threshold. It has a
+minimum and maximum (sometimes neither) but no step or default, and it can only be read or set
+in advanced mode. It is not a control.
+_Avoid_: Advanced parameter, advanced option
 
 **Preset file**:
-An advanced-mode JSON file holding many depth parameters at once, loaded into or saved from a
-device.
+An advanced-mode JSON file holding the values of many advanced controls and depth controls at
+once, loaded into or saved from a device.
 _Avoid_: Preset (alone), config file
 
 **Preset key**:
 One entry in a preset file, named as the SDK writes it, e.g. `controls-laserpower`. Some set a
-control, others an advanced-mode setting.
+control, others an advanced control.
 _Avoid_: Parameter
 
 ## Runs
