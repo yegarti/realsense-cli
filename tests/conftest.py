@@ -1,3 +1,4 @@
+import os
 import random
 from dataclasses import replace
 
@@ -16,6 +17,17 @@ from realsense_cli.types import Frame, FrameSet, Profile
 def _wide_console(monkeypatch):
     """Rich falls back to 80 columns without a terminal, which truncates the tables."""
     monkeypatch.setenv("COLUMNS", "120")
+
+
+def pytest_configure(config):
+    """
+    Rich colors CliRunner's output, which breaks text asserts, when the shell forces color or
+    pytest runs in a terminal: `-s` leaves the real stdout and stderr in place when
+    `realsense_cli.console` creates its consoles, and Rich picks colors then. This runs before
+    the test modules import the CLI; nothing conftest imports may pull in that module.
+    TTY_COMPATIBLE=0 makes Rich treat every console as a non-terminal, overriding FORCE_COLOR.
+    """
+    os.environ["TTY_COMPATIBLE"] = "0"
 
 
 @pytest.fixture(autouse=True)
