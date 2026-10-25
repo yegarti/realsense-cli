@@ -80,6 +80,20 @@ How a capture writes each frame to disk: PNG to look at, NPY to load as an array
 bytes exactly as the device sent them.
 _Avoid_: Format (alone), output format
 
+**Depth query**:
+A short run that reports the depth at one pixel or over a region, combined from a few frames
+after a warm-up (`rs depth`).
+_Avoid_: Depth measurement, depth probe
+
+**Region**:
+A rectangle of pixels a depth query reports on, given by its top-left corner, width and
+height. ROI is its short form on the command line.
+_Avoid_: ROI (in prose), area, window
+
+**Fill rate**:
+The share of a region's pixels that have depth.
+_Avoid_: Density, coverage, valid ratio
+
 **Hardware reset**:
 Power-cycling a device so it re-enumerates (`rs reset`).
 _Avoid_: Reset (alone, when control restore is meant)
