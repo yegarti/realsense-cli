@@ -66,8 +66,10 @@ class SoftwareCamera:
         self.device.register_info(rs.camera_info.serial_number, info.serial)
         self.device.register_info(rs.camera_info.firmware_version, info.fw)
         self.device.register_info(rs.camera_info.usb_type_descriptor, info.connection)
+        # fields the installed SDK doesn't know, such as imu_type on 2.56, are left out
         for name, value in (camera_info or {}).items():
-            self.device.register_info(rs.camera_info.__members__[name], value)
+            if name in rs.camera_info.__members__:
+                self.device.register_info(rs.camera_info.__members__[name], value)
 
         self._sensors: list[rs.software_sensor] = []
         self._frame_numbers = count()

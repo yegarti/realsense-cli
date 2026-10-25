@@ -1,3 +1,4 @@
+import pyrealsense2 as rs
 import pytest
 from typer.testing import CliRunner
 
@@ -7,6 +8,9 @@ from realsense_cli.errors import InvalidProfile
 from tests.test_json import invoke_json, json_error
 
 runner = CliRunner()
+
+# pyrealsense2 2.56 has no imu_type camera info
+HAS_IMU_TYPE = "imu_type" in rs.camera_info.__members__
 
 
 def test_info_lists_camera_info_and_sensors_without_calibration(driver):
@@ -23,7 +27,7 @@ def test_info_lists_camera_info_and_sensors_without_calibration(driver):
             "usb_type_descriptor": "3.2",
             "product_line": "D400",
             "asic_serial_number": "123456789012",
-            "imu_type": "BMI055",
+            **({"imu_type": "BMI055"} if HAS_IMU_TYPE else {}),
         },
         "sensors": ["Stereo Module", "RGB Camera", "Motion Module"],
     }
@@ -34,6 +38,7 @@ def test_connection_type_comes_right_before_usb_type(driver):
     assert fields.index("connection_type") + 1 == fields.index("usb_type_descriptor")
 
 
+@pytest.mark.skipif(not HAS_IMU_TYPE, reason="pyrealsense2 has no imu_type camera info")
 def test_unknown_camera_info_is_left_out(make_driver):
     # a D415 has no IMU, and reports its IMU type as "unknown"
     make_driver(SoftwareCamera(D435, D435_SENSORS, {"imu_type": "unknown"}))
