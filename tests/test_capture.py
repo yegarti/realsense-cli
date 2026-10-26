@@ -5,6 +5,7 @@ from datetime import datetime
 from itertools import count
 from pathlib import Path
 
+import numpy
 import pytest
 from PIL import Image
 from typer.testing import CliRunner
@@ -246,3 +247,136 @@ def test_default_directory_of_a_capture_in_the_same_second_gets_a_suffix(
     second = invoke_json("capture", "depth", "--warmup", "0")["directory"]
     assert Path(first).name == "rs-capture-20261021-143005"
     assert Path(second).name == "rs-capture-20261021-143005-2"
+
+
+def test_npy_alone_writes_arrays_of_the_pushed_values_and_no_png(feed, tmp_path):
+    result = invoke_json(
+        "capture",
+        "depth",
+        "infrared",
+        "color",
+        "--format",
+        "npy",
+        "--warmup",
+        "0",
+        "-o",
+        str(tmp_path),
+    )
+    assert [Path(f).name for f in result["files"]] == [
+        "depth-0.npy",
+        "infrared-0.npy",
+        "color-0.npy",
+        "capture.json",
+    ]
+    sidecar = json.loads((tmp_path / "capture.json").read_text())
+    [frames] = [frameset["frames"] for frameset in sidecar["framesets"]]
+    numbers = {frame["stream"]: frame["frame_number"] for frame in frames}
+    assert [frame["files"] for frame in frames] == [
+        ["depth-0.npy"],
+        ["infrared-0.npy"],
+        ["color-0.npy"],
+    ]
+
+    depth = numpy.load(tmp_path / "depth-0.npy")
+    assert (depth.dtype, depth.shape) == (numpy.uint16, (480, 640))
+    pushed = array("H", pixels(640 * 480 * 2, numbers["Depth"]))
+    assert depth.ravel().tolist() == list(pushed)
+
+    infrared = numpy.load(tmp_path / "infrared-0.npy")
+    assert (infrared.dtype, infrared.shape) == (numpy.uint8, (480, 640))
+    assert infrared.tobytes() == pixels(640 * 480, numbers["Infrared 1"])
+
+    color = numpy.load(tmp_path / "color-0.npy")
+    assert (color.dtype, color.shape) == (numpy.uint8, (480, 640, 3))
+    assert color.tobytes() == pixels(640 * 480 * 3, numbers["Color"])
+
+
+def test_several_file_formats_write_each_once_per_frame(feed, tmp_path):
+    result = invoke_json(
+        "capture",
+        "depth",
+        "--format",
+        "npy",
+        "--format",
+        "png",
+        "--format",
+        "npy",
+        "--frames",
+        "2",
+        "--warmup",
+        "0",
+        "-o",
+        str(tmp_path),
+    )
+    expected = [
+        f"depth-{i}{suffix}" for i in range(2) for suffix in (".npy", ".png", "-colorized.png")
+    ]
+    assert [Path(f).name for f in result["files"]] == [*expected, "capture.json"]
+    sidecar = json.loads((tmp_path / "capture.json").read_text())
+    assert [frameset["frames"][0]["files"] for frameset in sidecar["framesets"]] == [
+        expected[:3],
+        expected[3:],
+    ]
+    with Image.open(tmp_path / "depth-1.png") as png:
+        assert (
+            list(png.get_flattened_data())
+            == numpy.load(tmp_path / "depth-1.npy").ravel().tolist()
+        )
+
+
+@pytest.mark.parametrize("camera", [_bgr_camera], indirect=True)
+def test_bgr_color_stays_bgr_in_npy(feed, tmp_path):
+    invoke_json(
+        "capture", "color-0x0-0-bgr8", "--format", "npy", "--warmup", "0", "-o", str(tmp_path)
+    )
+    color = numpy.load(tmp_path / "color-0.npy")
+    assert (color.dtype, color.shape) == (numpy.uint8, (2, 4, 3))
+    # frame 0 is pushed as the bytes 0, 1, 2, ...: blue 0, green 1, red 2 in the first pixel
+    assert color[0, 0].tolist() == [0, 1, 2]
+    assert color[0, 1].tolist() == [3, 4, 5]
+
+
+def test_yuyv_is_saved_as_sent_in_npy(feed, tmp_path):
+    invoke_json(
+        "capture",
+        "color-640x480-30-yuyv",
+        "--format",
+        "npy",
+        "--warmup",
+        "0",
+        "-o",
+        str(tmp_path),
+    )
+    sidecar = json.loads((tmp_path / "capture.json").read_text())
+    [[color]] = [frameset["frames"] for frameset in sidecar["framesets"]]
+    assert sidecar["profiles"][0]["format"] == "YUYV"
+    assert color["files"] == ["color-0.npy"]
+    yuyv = numpy.load(tmp_path / "color-0.npy")
+    assert (yuyv.dtype, yuyv.shape) == (numpy.uint8, (480, 640, 2))
+    assert yuyv.tobytes() == pixels(640 * 480 * 2, color["frame_number"])
+
+
+def test_profile_a_file_format_cannot_hold_fails_naming_it(driver, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "capture",
+            "color-640x480-30-yuyv",
+            "--format",
+            "npy",
+            "--format",
+            "png",
+            "-o",
+            str(tmp_path / "out"),
+        ],
+    )
+    error = json_error(result, InvalidProfile.exit_code)
+    assert "as PNG" in error["message"]
+    assert not (tmp_path / "out").exists()
+
+
+def test_unknown_file_format_is_usage_error(driver, tmp_path):
+    result = runner.invoke(app, ["--json", "capture", "--format", "z16", "-o", str(tmp_path)])
+    assert result.exit_code == 2, result.output
+    assert "--format" in json.loads(result.stderr)["error"]["message"]

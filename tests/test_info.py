@@ -68,7 +68,7 @@ COLOR_INTRINSICS = {
     "index": 0,
     "width": 640,
     "height": 480,
-    "formats": ["RGB8"],
+    "formats": ["RGB8", "YUYV"],
     "fps": [6, 15, 30],
     "ppx": 321.75,
     "ppy": 243.5,
