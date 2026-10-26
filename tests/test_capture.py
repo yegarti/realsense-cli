@@ -11,7 +11,13 @@ from PIL import Image
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
-from realsense_cli.driver.software import D435, SensorSpec, SoftwareCamera, pixels
+from realsense_cli.driver.software import (
+    D435,
+    SensorSpec,
+    SoftwareCamera,
+    depth_pixels,
+    pixels,
+)
 from realsense_cli.errors import InvalidProfile, InvalidValue, NoFrames
 from realsense_cli.types import Frame, Profile, Resolution, Sensor, Stream
 from tests.test_json import invoke_json, json_error
@@ -44,7 +50,7 @@ def test_raw_depth_png_round_trips_to_the_pushed_values(feed, tmp_path):
     invoke_json("capture", "depth", "--warmup", "0", "-o", str(tmp_path))
     sidecar = json.loads((tmp_path / "capture.json").read_text())
     [[depth]] = [frameset["frames"] for frameset in sidecar["framesets"]]
-    pushed = array("H", pixels(640 * 480 * 2, depth["frame_number"]))
+    pushed = array("H", depth_pixels(640, 480, depth["frame_number"]))
     with Image.open(tmp_path / "depth-0.png") as png:
         assert png.size == (640, 480)
         assert list(png.get_flattened_data()) == list(pushed)
@@ -279,7 +285,7 @@ def test_npy_alone_writes_arrays_of_the_pushed_values_and_no_png(feed, tmp_path)
 
     depth = numpy.load(tmp_path / "depth-0.npy")
     assert (depth.dtype, depth.shape) == (numpy.uint16, (480, 640))
-    pushed = array("H", pixels(640 * 480 * 2, numbers["Depth"]))
+    pushed = array("H", depth_pixels(640, 480, numbers["Depth"]))
     assert depth.ravel().tolist() == list(pushed)
 
     infrared = numpy.load(tmp_path / "infrared-0.npy")

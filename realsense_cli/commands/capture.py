@@ -126,7 +126,7 @@ def rs_capture(
 
     started = driver.play(profiles)
     try:
-        framesets = _collect(driver, [p.stream for p in started], frames, warmup)
+        framesets = collect(driver, [p.stream for p in started], frames, warmup)
     finally:
         err_console.print("Stopping all streams")
         driver.stop()
@@ -137,22 +137,24 @@ def rs_capture(
     sidecar = {
         "device": {"name": camera_info["name"], "serial": camera_info["serial_number"]},
         "depth_scale": driver.depth_scale(),
-        "profiles": [
-            {
-                "stream": p.stream,
-                "width": p.resolution.width,
-                "height": p.resolution.height,
-                "fps": p.fps,
-                "format": p.format.upper(),
-                "index": p.index,
-            }
-            for p in started
-        ],
+        "profiles": [profile_payload(p) for p in started],
         "framesets": frames_meta,
     }
     (output / "capture.json").write_text(json.dumps(sidecar, indent=2) + "\n")
     paths = [str(output / name) for name in [*files, "capture.json"]]
     emit(ctx, {"directory": str(output), "files": paths}, lambda: list_paths(paths))
+
+
+def profile_payload(profile: Profile) -> dict[str, Any]:
+    """PROFILE as `capture.json` lists it"""
+    return {
+        "stream": profile.stream,
+        "width": profile.resolution.width,
+        "height": profile.resolution.height,
+        "fps": profile.fps,
+        "format": profile.format.upper(),
+        "index": profile.index,
+    }
 
 
 def _new_directory(name: str) -> Path:
@@ -189,7 +191,7 @@ def _with_format(profile: Profile, file_formats: list[FileFormat]) -> Profile:
     return replace(profile, format=_DEFAULT_FORMATS[profile.stream])
 
 
-def _collect(
+def collect(
     driver: DriverProtocol, streams: list[str], frames: int, warmup: float
 ) -> list[FrameSet]:
     """

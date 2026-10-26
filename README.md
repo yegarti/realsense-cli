@@ -15,6 +15,7 @@
 - **Configure** sensor controls (exposure, gain, laser power, etc.)
 - **Stream** selected profiles and monitor live FPS per stream
 - **Capture** framesets to PNG or NumPy `.npy` files with a JSON sidecar, to look at or load afterwards
+- **Measure** the depth at a pixel, or over a region of the depth image
 - **Inspect** ROS1 bag files without a full ROS installation
 - Multi-device support via `--serial`
 
@@ -378,6 +379,38 @@ last frameset is complete fails the capture with exit code `9`, and nothing is w
 
 ---
 
+### `rs depth` — depth at a pixel or region
+
+A depth query streams depth, discards the frames of the first second so auto-exposure settles,
+then combines 10 frames into the depth at one pixel or the statistics of a region:
+```sh
+rs depth 320 240                   # the depth at pixel (320, 240)
+rs depth --roi 300,220,40,40       # a 40x40 region from (300, 220): X,Y,W,H
+rs depth                           # the whole image
+rs depth 320 240 --frames 30 --warmup 3
+```
+```
+                  Depth
+  Depth                         1.942 m
+  Region              400, 200, 100x100
+  Fill rate                      100.0%
+  Valid pixels           10000 of 10000
+  Min                           1.901 m
+  ...
+```
+
+Coordinates are pixels of the depth image, of the camera's default depth profile; the depth is not
+aligned to color. Each pixel's depth is the median of its non-zero samples across the frames: 0 is
+no depth, and a pixel with none in any frame is invalid. A region's statistics (min, max, mean,
+median and population standard deviation) are over its valid pixels, and its **fill rate** is the
+share of pixels that have depth. Depths are in meters.
+
+No depth is an answer, not an error: a pixel with no samples, or a region with a fill rate of 0,
+exits `0` with `null` depths. A pixel or region outside the depth image exits `7` (a region partly
+outside is rejected, not clipped), and a depth stream that sends nothing for 3 seconds exits `9`.
+
+---
+
 ### `rs bag` — ROS bag inspection
 
 ```sh
@@ -432,6 +465,8 @@ parsers.
 | `rs stream list` | `{"profiles": [{"sensor", "stream", "width", "height", "fps", "format", "index"}]}` |
 | `rs stream play --frames N` / `--duration S` | `{"streams": [{"stream", "frames"}]}` |
 | `rs capture` | `{"directory", "files": [...]}`: absolute paths of the files written, `capture.json` last |
+| `rs depth X Y` | `{"profiles": [...], "frames", "depth_scale", "depth", "pixel": {"x", "y", "samples"}}`: `profiles` in `capture.json`'s shape, `depth` in meters rounded to 4 decimals and `null` with no depth, `samples` the frames that had depth there |
+| `rs depth [--roi X,Y,W,H]` | as above with `"region": {"x", "y", "width", "height", "pixels", "valid_pixels", "fill_rate", "min", "max", "mean", "median", "stddev"}` in place of `pixel`, and `depth` its median. `fill_rate` is a fraction from 0 to 1; with no valid pixels every statistic is `null`. The whole image has its coordinates filled in |
 | `rs bag info BAG` | `{"path", "duration", "topics": [{"name", "messages", "type"}]}` |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
@@ -461,9 +496,9 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `3` | No device connected, none matches `--serial`, or a reset device didn't reconnect |
 | `4` | Unknown sensor |
 | `5` | Unknown control |
-| `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile; for `rs capture`, a stream or stream format it can't save in a file format asked for) |
-| `7` | Invalid control value, a control that failed to write during `rs config restore`, or an `rs capture` output directory that isn't empty |
+| `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile; for `rs capture`, a stream or stream format it can't save in a file format asked for; for `rs depth`, a device without a depth sensor) |
+| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, or an `rs depth` pixel or region outside the depth image |
 | `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
-| `9` | A stream in a bounded `rs stream play` or `rs capture` received no frames, or stopped sending them for 3 seconds |
+| `9` | A stream in a bounded `rs stream play`, `rs capture` or `rs depth` received no frames, or stopped sending them for 3 seconds |
 | `10` | A control the sensor lists but can't read right now (e.g. a temperature while not streaming) |
 | `130` | Interrupted (Ctrl+C) |

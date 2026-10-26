@@ -42,7 +42,7 @@ All hardware interaction goes through the driver interface in `driver/base.py`. 
 
 The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the driver on first use. Commands that need a camera take `ctx: typer.Context` and call `require_device(ctx)`, which raises `DeviceNotFound` when none is connected; `rs list` uses `get_driver(ctx)`. Commands that need no camera (`bag`, `--help`) never create an `rs.context`, and `pyrealsense2` is imported only inside `create_driver()`, never at CLI import time.
 
-`driver/software.py` simulates a D435 on `rs.software_device`, injected into the real driver with `Realsense(devices=[...])`. pyrealsense2 can't add a software device to an `rs.context`, so the pipeline can't see it, and `play()` on injected devices always streams through the sensor API. A software device only produces frames that are pushed to it.
+`driver/software.py` simulates a D435 on `rs.software_device`, injected into the real driver with `Realsense(devices=[...])`. pyrealsense2 can't add a software device to an `rs.context`, so the pipeline can't see it, and `play()` on injected devices always streams through the sensor API. A software device only produces frames that are pushed to it: its Z16 frames hold a known depth pattern (`depth_pixels()`), every other stream a byte ramp.
 
 `typings/pyrealsense2/__init__.pyi` is a partial stub for the pyrealsense2 API this project uses (the package ships no type information). Add any newly used pyrealsense2 call to it, or `ty` fails.
 
@@ -58,6 +58,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 | `rs config list/get/set/restore` | `commands/config.py`, `restore.py` | Read/write sensor controls, restore defaults |
 | `rs stream list/play` | `commands/stream.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream |
 | `rs capture` | `commands/capture.py`, `png.py`, `npy.py` | Bounded run that saves framesets as PNGs and/or `.npy` arrays (`--format`) plus a `capture.json` sidecar |
+| `rs depth` | `commands/depth.py`, `depth.py` | Depth at a pixel or over a region, the median of each pixel's non-zero samples across a few frames |
 | `rs bag info` | `commands/bag.py` | Inspect ROS bag files |
 | `rs reset` | `cli.py` | Hardware reset |
 

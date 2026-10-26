@@ -8,6 +8,9 @@ pyrealsense2 calls as production. It produces no frames on its own: call
 
 The last profile listed for each stream in a `SensorSpec` is that stream's default.
 
+Z16 frames hold a known depth pattern (`depth_pixels()`); every other stream a byte ramp
+(`pixels()`).
+
 A software device keeps extrinsics per profile, where a real device keeps them per stream: each
 stream's profiles are linked to each other, so extrinsics registered between two streams reach
 every profile of both.
@@ -15,9 +18,11 @@ every profile of both.
 
 import threading
 import time
+from array import array
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from itertools import count
+from typing import NamedTuple
 
 import pyrealsense2 as rs
 
@@ -136,11 +141,14 @@ class SoftwareCamera:
                     sensor.on_motion_frame(motion)
                 else:
                     vsp = profile.as_video_stream_profile()
-                    bpp = _BYTES_PER_PIXEL[vsp.format().name]
+                    fmt = vsp.format().name
+                    bpp = _BYTES_PER_PIXEL[fmt]
                     video = rs.software_video_frame()
-                    video.pixels = bytearray(
-                        pixels(vsp.width() * vsp.height() * bpp, frame_number)
-                    )
+                    if fmt == "z16":
+                        data = depth_pixels(vsp.width(), vsp.height(), frame_number)
+                    else:
+                        data = pixels(vsp.width() * vsp.height() * bpp, frame_number)
+                    video.pixels = bytearray(data)
                     video.bpp = bpp
                     video.stride = vsp.width() * bpp
                     video.profile = vsp
@@ -161,6 +169,39 @@ def pixels(size: int, frame_number: int) -> bytes:
     start = frame_number % 256
     ramp = _BYTE_RAMP * (size // 256 + 2)
     return ramp[start : start + size]
+
+
+class Rect(NamedTuple):
+    x: int
+    y: int
+    width: int
+    height: int
+
+
+# The depth pattern, in depth units (1 mm at the default `depth_units` of 0.001), laid out for
+# the 640x480 depth profiles; a smaller image holds the part that fits
+DEPTH_BACKGROUND = 2000
+DEPTH_NEAR = 1000
+DEPTH_FLICKER = 1500
+NEAR_BLOCK = Rect(160, 120, 160, 120)
+HOLE = Rect(400, 300, 80, 60)  # no depth
+FLICKER_PATCH = Rect(560, 40, 16, 16)  # DEPTH_FLICKER in even frames, no depth in odd ones
+
+
+def depth_pixels(width: int, height: int, frame_number: int) -> bytes:
+    """
+    The Z16 pixel data pushed in frame FRAME_NUMBER: DEPTH_BACKGROUND, with DEPTH_NEAR in
+    NEAR_BLOCK, zeros in HOLE, and FLICKER_PATCH that has depth only in even frames
+    """
+    depth = array("H", [DEPTH_BACKGROUND]) * (width * height)
+    flicker = DEPTH_FLICKER if frame_number % 2 == 0 else 0
+    for rect, value in ((NEAR_BLOCK, DEPTH_NEAR), (HOLE, 0), (FLICKER_PATCH, flicker)):
+        right = min(rect.x + rect.width, width)
+        for y in range(rect.y, min(rect.y + rect.height, height)):
+            depth[y * width + rect.x : y * width + right] = array("H", [value]) * (
+                right - rect.x
+            )
+    return depth.tobytes()
 
 
 def _add_stream(
