@@ -254,6 +254,39 @@ def list_frame_counts(counts: dict[str, int]) -> None:
     console.print(table)
 
 
+def depth_query(payload: dict[str, Any]) -> None:
+    """`rs depth`'s result, from its JSON payload: the depth first, then how it was measured"""
+    table = Table(title="Depth", box=box.SIMPLE, show_header=False)
+    table.add_column()
+    table.add_column(justify="right")
+    table.add_row("Depth", _meters(payload["depth"]))
+    if "pixel" in payload:
+        pixel = payload["pixel"]
+        table.add_row("Pixel", f"{pixel['x']}, {pixel['y']}")
+        table.add_row("Samples", f"{pixel['samples']} of {payload['frames']} frames")
+    else:
+        region = payload["region"]
+        table.add_row(
+            "Region", f"{region['x']}, {region['y']}, {region['width']}x{region['height']}"
+        )
+        table.add_row("Fill rate", f"{region['fill_rate']:.1%}")
+        table.add_row("Valid pixels", f"{region['valid_pixels']} of {region['pixels']}")
+        for statistic in ("min", "max", "mean", "median", "stddev"):
+            table.add_row(statistic.title(), _meters(region[statistic]))
+        table.add_row("Frames", str(payload["frames"]))
+    [profile] = payload["profiles"]
+    table.add_row(
+        "Profile",
+        f"{profile['stream']} {profile['width']}x{profile['height']} "
+        f"{profile['format']} @ {profile['fps']}",
+    )
+    console.print(table)
+
+
+def _meters(depth: float | None) -> str:
+    return "no depth" if depth is None else f"{depth:.3f} m"
+
+
 def list_paths(paths: list[str]) -> None:
     # one per line and unwrapped, so they can be piped or copied
     for path in paths:
