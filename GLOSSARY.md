@@ -65,6 +65,11 @@ _Avoid_: Parameter
 
 ## Runs
 
+**Frameset**:
+One frame from each of a run's streams, grouped by time as the run receives them. A recording
+stores each stream's frames separately, not framesets.
+_Avoid_: Frame group, synced frames
+
 **Bounded run**:
 A streaming command limited by a frame count or a duration, which ends on its own and reports a
 summary.
