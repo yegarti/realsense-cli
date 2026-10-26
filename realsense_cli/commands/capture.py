@@ -1,19 +1,35 @@
 import json
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 
-from realsense_cli import png
+from realsense_cli import npy, png
 from realsense_cli.console import err_console
 from realsense_cli.driver.base import DriverProtocol
 from realsense_cli.errors import InvalidProfile, InvalidValue, NoFrames
 from realsense_cli.printer import emit, list_paths
 from realsense_cli.session import require_device
-from realsense_cli.types import _STREAM_ALIASES, FrameSet, Profile, Stream
+from realsense_cli.types import _STREAM_ALIASES, FrameSet, Image, Profile, Stream
+
+
+class FileFormat(StrEnum):
+    """How a capture writes each frame to disk; the file's extension"""
+
+    PNG = "png"
+    NPY = "npy"
+
+
+# The stream formats each file format holds, and its encoder
+_ENCODERS: dict[str, tuple[tuple[str, ...], Callable[[Image], bytes]]] = {
+    FileFormat.PNG: (png.FORMATS, png.encode),
+    FileFormat.NPY: (npy.FORMATS, npy.encode),
+}
 
 # The format a stream is captured in when its profile leaves the format unset
 _DEFAULT_FORMATS: dict[str, str] = {
@@ -51,6 +67,17 @@ def rs_capture(
             help="Seconds of frames to discard first, while auto-exposure settles",
         ),
     ] = 1.0,
+    file_formats: Annotated[
+        list[FileFormat] | None,
+        typer.Option(
+            "--format",
+            help=(
+                "File format to save frames in, repeatable for several (default: png). "
+                "Not the stream format (z16, rgb8 ...), which a profile sets"
+            ),
+            show_default=False,
+        ),
+    ] = None,
     output: Annotated[
         Path | None,
         typer.Option(
@@ -74,7 +101,9 @@ def rs_capture(
 
     Discards the frames of the first --warmup seconds, then saves --frames framesets.
 
-    Color and infrared are saved as 8-bit PNGs, depth as raw 16-bit and colorized PNGs.
+    PNG: color and infrared as 8-bit PNGs, depth as raw 16-bit and colorized PNGs.
+
+    NPY: each frame as a NumPy array of the values as the camera sent them.
 
     A capture.json sidecar holds the profiles, frame metadata and depth scale.
     """
@@ -87,9 +116,12 @@ def rs_capture(
         raise InvalidValue(
             f"Output directory '{output}' is not empty; pass --force to write into it anyway"
         )
+    # in the order first asked for, each once
+    file_formats = list(dict.fromkeys(file_formats or [FileFormat.PNG]))
     driver = require_device(ctx)
     profiles = [
-        _with_format(p) for p in profiles or [Profile(Stream.DEPTH), Profile(Stream.COLOR)]
+        _with_format(p, file_formats)
+        for p in profiles or [Profile(Stream.DEPTH), Profile(Stream.COLOR)]
     ]
 
     started = driver.play(profiles)
@@ -100,7 +132,7 @@ def rs_capture(
         driver.stop()
 
     output.mkdir(parents=True, exist_ok=True)
-    files, frames_meta = _write(output, framesets)
+    files, frames_meta = _write(output, framesets, file_formats)
     camera_info = driver.camera_info()
     sidecar = {
         "device": {"name": camera_info["name"], "serial": camera_info["serial_number"]},
@@ -134,16 +166,20 @@ def _new_directory(name: str) -> Path:
     return path
 
 
-def _with_format(profile: Profile) -> Profile:
+def _with_format(profile: Profile, file_formats: list[FileFormat]) -> Profile:
     """
-    PROFILE, in the stream's default capture format when it leaves the format unset
+    PROFILE, in the stream's default capture format when it leaves the format unset. Its
+    stream format must suit each of FILE_FORMATS
     """
     if profile.format != "any":
-        if profile.format.lower() not in png.FORMATS:
-            raise InvalidProfile(
-                f"Can't capture '{profile}': capture saves formats "
-                f"{', '.join(f.upper() for f in png.FORMATS)}"
-            )
+        for file_format in file_formats:
+            stream_formats, _ = _ENCODERS[file_format]
+            if profile.format.lower() not in stream_formats:
+                raise InvalidProfile(
+                    f"Can't capture '{profile}' as {file_format.upper()}: "
+                    f"{file_format.upper()} files hold stream formats "
+                    f"{', '.join(f.upper() for f in stream_formats)}"
+                )
         return profile
     if profile.stream not in _DEFAULT_FORMATS:
         streams = ", ".join(_FILE_STEMS[s] for s in _DEFAULT_FORMATS)
@@ -199,9 +235,12 @@ def _collect(
     return framesets
 
 
-def _write(output: Path, framesets: list[FrameSet]) -> tuple[list[str], list[dict[str, Any]]]:
+def _write(
+    output: Path, framesets: list[FrameSet], file_formats: list[FileFormat]
+) -> tuple[list[str], list[dict[str, Any]]]:
     """
-    Write FRAMESETS into OUTPUT; the file names written, and each frameset's sidecar entry
+    Write FRAMESETS into OUTPUT in each of FILE_FORMATS; the file names written, and each
+    frameset's sidecar entry
     """
     # numbers padded to one width, so the files sort in frameset order
     width = len(str(len(framesets) - 1))
@@ -212,11 +251,16 @@ def _write(output: Path, framesets: list[FrameSet]) -> tuple[list[str], list[dic
         for stream, frame in frameset.items():
             stem = f"{_file_stem(stream)}-{i:0{width}d}"
             written = []
-            for name, image in ((stem, frame.image), (f"{stem}-colorized", frame.colorized)):
-                if image is None:
-                    continue
-                (output / f"{name}.png").write_bytes(png.encode(image))
-                written.append(f"{name}.png")
+            for file_format in file_formats:
+                _, encode = _ENCODERS[file_format]
+                images = [(stem, frame.image)]
+                if file_format == FileFormat.PNG:
+                    images.append((f"{stem}-colorized", frame.colorized))
+                for name, image in images:
+                    if image is None:
+                        continue
+                    (output / f"{name}.{file_format}").write_bytes(encode(image))
+                    written.append(f"{name}.{file_format}")
             files += written
             frame_entries.append(
                 {

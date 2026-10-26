@@ -57,7 +57,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 | `rs info` | `commands/info.py` | Device details (every camera info field); with profiles or `--all-profiles`, intrinsics and extrinsics |
 | `rs config list/get/set/restore` | `commands/config.py`, `restore.py` | Read/write sensor controls, restore defaults |
 | `rs stream list/play` | `commands/stream.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream |
-| `rs capture` | `commands/capture.py`, `png.py` | Bounded run that saves framesets as PNGs plus a `capture.json` sidecar |
+| `rs capture` | `commands/capture.py`, `png.py`, `npy.py` | Bounded run that saves framesets as PNGs and/or `.npy` arrays (`--format`) plus a `capture.json` sidecar |
 | `rs bag info` | `commands/bag.py` | Inspect ROS bag files |
 | `rs reset` | `cli.py` | Hardware reset |
 

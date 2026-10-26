@@ -32,7 +32,7 @@ from realsense_cli.types import (
     Stream,
 )
 
-_BYTES_PER_PIXEL: dict[str, int] = {"z16": 2, "y8": 1, "rgb8": 3, "bgr8": 3}
+_BYTES_PER_PIXEL: dict[str, int] = {"z16": 2, "y8": 1, "rgb8": 3, "bgr8": 3, "yuyv": 2}
 
 
 @dataclass
@@ -257,7 +257,10 @@ D435_SENSORS: list[SensorSpec] = [
     ),
     SensorSpec(
         name=Sensor.RGB_CAMERA,
-        profiles=[_video(Stream.COLOR, fps, "rgb8", 0) for fps in (6, 15, 30)],
+        profiles=[
+            *(_video(Stream.COLOR, fps, "rgb8", 0) for fps in (6, 15, 30)),
+            _video(Stream.COLOR, 30, "yuyv"),
+        ],
         options=[Option("brightness", "", -64.0, 64.0, 1.0, 0.0, int)],
         intrinsics={
             Stream.COLOR: Intrinsics(
