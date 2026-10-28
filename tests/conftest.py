@@ -1,12 +1,15 @@
 import os
 import random
+import sqlite3
+import time
+from collections.abc import Collection
+from contextlib import closing
 from dataclasses import replace
+from pathlib import Path
 
 import pyrealsense2 as rs
 import pytest
 from loguru import logger
-from rosbags.rosbag1 import Writer
-from rosbags.typesys import Stores, get_typestore
 
 from realsense_cli.driver.realsense import Realsense
 from realsense_cli.driver.software import D435, D435_SENSORS, SoftwareCamera, d435
@@ -148,16 +151,56 @@ def feed(driver, camera, monkeypatch) -> Feed:
     return fed
 
 
+# The streams `recording` holds and the frames pushed to each: color is pushed fewer
+RECORDED: dict[str, int] = {"Depth": 5, "Color": 3, "Gyro": 3, "Accel": 3}
+
+
+def record(path: Path, profiles: list[str], pushes: list[Collection[str]]) -> Path:
+    """
+    Record the simulated D435 streaming PROFILES to PATH with `rs.recorder`, pushing one frame
+    to the streams each of PUSHES names
+    """
+    camera = d435()
+    recorder = rs.recorder(str(path), camera.device)
+    driver = Realsense(devices=[camera.device])
+    driver.play([Profile.from_string(p) for p in profiles], pipeline=False)
+    for streams in pushes:
+        camera.push_frames(streams)
+        # message times are wall-clock: spread them out so the recording has a duration
+        time.sleep(0.01)
+    driver.stop()
+    # releasing the recorder flushes its queue to the file
+    del recorder
+    return path
+
+
+@pytest.fixture(scope="session")
+def recording(tmp_path_factory) -> Path:
+    """A recording of depth, color, gyro and accel, with `RECORDED` frames per stream"""
+    pushes = [[s for s, n in RECORDED.items() if n > i] for i in range(max(RECORDED.values()))]
+    return record(
+        tmp_path_factory.mktemp("recording") / "run.db3",
+        ["depth-640x480-30-z16", "color-640x480-30-rgb8", "gyro", "accel"],
+        pushes,
+    )
+
+
 @pytest.fixture
-def bag(tmp_path):
-    typestore = get_typestore(Stores.ROS1_NOETIC)
-    string = typestore.types["std_msgs/msg/String"]
-    path = tmp_path / "test.bag"
-    with Writer(path) as writer:
-        conn = writer.add_connection("/device_0/info", string.__msgtype__, typestore=typestore)
-        for t in (1, 3):
-            data = typestore.serialize_ros1(string(data="x"), string.__msgtype__)
-            writer.write(conn, t * 1_000_000_000, data)
+def rosbag2(tmp_path) -> Path:
+    """A stock rosbag2 `.db3` with one message, which no RealSense device recorded"""
+    path = tmp_path / "chatter.db3"
+    with closing(sqlite3.connect(path)) as db, db:
+        db.executescript(
+            """
+            CREATE TABLE topics (id INTEGER PRIMARY KEY, name TEXT NOT NULL,
+                type TEXT NOT NULL, serialization_format TEXT NOT NULL,
+                offered_qos_profiles TEXT NOT NULL);
+            CREATE TABLE messages (id INTEGER PRIMARY KEY, topic_id INTEGER NOT NULL,
+                timestamp INTEGER NOT NULL, data BLOB NOT NULL);
+            INSERT INTO topics VALUES (1, '/chatter', 'std_msgs/msg/String', 'cdr', '');
+            INSERT INTO messages VALUES (1, 1, 1000000000, x'00');
+            """
+        )
     return path
 
 

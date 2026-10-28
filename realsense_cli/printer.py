@@ -3,7 +3,6 @@ import math
 from collections.abc import Callable, Iterable
 from decimal import Decimal
 from itertools import groupby
-from pathlib import Path
 from typing import Any
 
 import typer
@@ -11,7 +10,6 @@ from rich import box
 from rich.table import Table
 
 from realsense_cli.console import console
-from realsense_cli.rs_bag_parser import TopicInfo
 from realsense_cli.session import json_output
 from realsense_cli.types import (
     Calibration,
@@ -312,17 +310,31 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
     console.print(table)
 
 
-def list_bag_data(path: Path, duration: float, topics: list[TopicInfo]):
-    info_table = Table(box=box.SIMPLE_HEAD)
-    info_table.add_column()
-    info_table.add_column()
-    info_table.add_row("Bag", str(path))
-    info_table.add_row("Duration", f"{duration} seconds")
-    table = Table(title="Data", box=box.SIMPLE)
-    table.add_column("Topic")
-    table.add_column("Messages")
-    table.add_column("Message Type")
-    for info in topics:
-        table.add_row(info.name, str(info.total_messages), info.msg_type)
+def recording_details(payload: dict[str, Any]) -> None:
+    """`rs bag info`'s result, from its JSON payload: the file, its device, then its streams"""
+    table = Table(box=box.SIMPLE, show_header=False)
+    table.add_column()
+    # a long path wraps instead of losing its end
+    table.add_column(overflow="fold")
+    table.add_row("Recording", payload["path"])
+    table.add_row("Duration", f"{payload['duration']:g} seconds")
     console.print(table)
-    console.print(info_table)
+    device_details(payload["device"], payload["sensors"])
+
+    table = Table(title="Streams", box=box.SIMPLE)
+    table.add_column("Sensor")
+    table.add_column("Stream")
+    table.add_column("Resolution")
+    table.add_column("FPS", justify="right")
+    table.add_column("Format")
+    table.add_column("Frames", justify="right")
+    for stream in payload["streams"]:
+        table.add_row(
+            stream["sensor"],
+            stream["stream"],
+            str(Resolution(stream["width"], stream["height"])),
+            str(stream["fps"]),
+            stream["format"],
+            str(stream["frames"]),
+        )
+    console.print(table)
