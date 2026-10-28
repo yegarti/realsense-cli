@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from realsense_cli.types import Profile, Stream
 
 _stream_order: dict[str, int] = {stream: i for i, stream in enumerate(Stream)}
@@ -49,3 +51,15 @@ def find_origin_sensor(sensor_profiles: dict[str, list[Profile]]) -> dict[str, s
                 continue
             res[profile.stream] = sensor
     return res
+
+
+def new_path(stem: str, suffix: str = "") -> Path:
+    """
+    ./STEM+SUFFIX, or ./STEM-2+SUFFIX, ./STEM-3+SUFFIX ... when it is taken, e.g. by a run in
+    the same second
+    """
+    path, n = Path(stem + suffix), 1
+    while path.exists():
+        n += 1
+        path = Path(f"{stem}-{n}{suffix}")
+    return path

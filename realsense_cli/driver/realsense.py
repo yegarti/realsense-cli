@@ -1,7 +1,9 @@
 import struct
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from itertools import permutations
+from typing import Protocol
 
 import pyrealsense2 as rs
 from loguru import logger
@@ -12,6 +14,7 @@ from realsense_cli.errors import (
     DeviceNotFound,
     InvalidProfile,
     InvalidValue,
+    RsCliError,
     UnknownControl,
     UnknownSensor,
 )
@@ -78,20 +81,37 @@ def _image(rs_frame: rs.video_frame) -> Image:
     return Image(width, height, rs_frame.get_profile().format().name, data)
 
 
+class AdvancedMode(Protocol):
+    """The part of `rs.rs400_advanced_mode` the driver calls"""
+
+    def is_enabled(self) -> bool: ...
+
+    def toggle_advanced_mode(self, enable: bool) -> None: ...
+
+    def serialize_json(self) -> str: ...
+
+
 class Realsense:
     """
     pyrealsense2 wrapper driver
     """
 
-    def __init__(self, devices: list[rs.device] | None = None):
+    def __init__(
+        self,
+        devices: list[rs.device] | None = None,
+        advanced_modes: dict[str, AdvancedMode] | None = None,
+    ):
         """
         DEVICES overrides the devices enumerated from the context, e.g. `rs.software_device`
         instances, which pyrealsense2 cannot add to a context. The pipeline API only sees
         context devices, so injected devices stream with `play(pipeline=False)`.
+        ADVANCED_MODES gives injected devices their advanced mode, by serial: pyrealsense2 has
+        none for a software device. An injected device without one has no advanced mode
         """
         logger.info("Instancing Realsense driver")
         self._ctx: rs.context = rs.context()
         self._injected_devices = devices
+        self._advanced_modes = advanced_modes or {}
         self._devices: list[rs.device] = []
         self._sensors: dict[rs.device, dict[str, rs.sensor]] = {}
         self._streams_map: dict[str, rs.stream] = {
@@ -559,6 +579,64 @@ class Realsense:
         Send hardware reset to device. With TIMEOUT, wait up to TIMEOUT seconds for it to come
         back and answer; whether it did
         """
+        return self._reset_and_wait(self._device.hardware_reset, timeout)
+
+    def advanced_mode(self) -> bool | None:
+        """
+        Whether advanced mode is on on the active device; None when the device has none
+        """
+        advanced_mode = self._advanced_mode()
+        return None if advanced_mode is None else advanced_mode.is_enabled()
+
+    def enable_advanced_mode(self, timeout: float) -> bool:
+        """
+        Turn advanced mode on, which resets the device, and wait up to TIMEOUT seconds for it
+        to come back and answer; whether it did. The device stays the active one
+        """
+        advanced_mode = self._require_advanced_mode()
+        if self._injected_devices is not None:
+            # a software device doesn't reset
+            advanced_mode.toggle_advanced_mode(True)
+            return True
+        serial = self.active_device
+        if not self._reset_and_wait(lambda: advanced_mode.toggle_advanced_mode(True), timeout):
+            return False
+        # every handle on the device from before the reset is stale
+        self._devices.clear()
+        self._sensors.clear()
+        self._query()
+        self.active_device = serial
+        return True
+
+    def serialize_preset(self) -> str:
+        """
+        The active device's preset file, in the JSON librealsense writes. Needs advanced mode on
+        """
+        return self._require_advanced_mode().serialize_json()
+
+    def _advanced_mode(self) -> AdvancedMode | None:
+        if self._injected_devices is not None:
+            return self._advanced_modes.get(self.active_device)
+        # constructing it never fails: it only raises once used on a device without one
+        advanced_mode = rs.rs400_advanced_mode(self._device)
+        try:
+            advanced_mode.is_enabled()
+        except RuntimeError as e:
+            logger.debug("device '{}' has no advanced mode: {}", self.active_device, e)
+            return None
+        return advanced_mode
+
+    def _require_advanced_mode(self) -> AdvancedMode:
+        advanced_mode = self._advanced_mode()
+        if advanced_mode is None:
+            raise RsCliError(f"Device '{self.active_device}' has no advanced mode")
+        return advanced_mode
+
+    def _reset_and_wait(self, reset: Callable[[], None], timeout: float | None) -> bool:
+        """
+        Call RESET, which resets the active device. With TIMEOUT, wait up to TIMEOUT seconds
+        for it to come back and answer; whether it did
+        """
         serial = self.active_device
         device = self._device
         watch = ReconnectWatch(serial)
@@ -581,7 +659,7 @@ class Realsense:
             return False
 
         self._ctx.set_devices_changed_callback(on_change)
-        return reset_and_wait(watch, device.hardware_reset, ready, timeout)
+        return reset_and_wait(watch, reset, ready, timeout)
 
     def _get_sensor(self, sensor: str) -> rs.sensor:
         if sensor not in self._sensors[self._device]:

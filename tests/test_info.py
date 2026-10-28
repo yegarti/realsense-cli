@@ -21,6 +21,7 @@ def test_info_lists_camera_info_and_sensors_without_calibration(driver):
             "firmware_version": "5.15.0.0",
             "recommended_firmware_version": "5.16.0.1",
             "physical_port": "/sys/devices/pci0000:00/usb2/2-1",
+            "advanced_mode": "YES",
             "product_id": "0B07",
             "camera_locked": "YES",
             "connection_type": "USB",

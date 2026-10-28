@@ -44,6 +44,10 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 
 `driver/software.py` simulates a D435 on `rs.software_device`, injected into the real driver with `Realsense(devices=[...])`. pyrealsense2 can't add a software device to an `rs.context`, so the pipeline can't see it, and `play()` on injected devices always streams through the sensor API. A software device only produces frames that are pushed to it: its Z16 frames hold a known depth pattern (`depth_pixels()`), every other stream a byte ramp.
 
+pyrealsense2 has no advanced mode for a software device either, so `Realsense(advanced_modes={serial: ...})` serves injected devices theirs; `software_driver(*cameras)` builds the driver that way. The simulated D435's `FakeAdvancedMode` (on unless `d435(advanced_mode=False)`) holds the D435 Default tuning in real `ST*` group structs and writes librealsense's preset JSON. As on a D400, the depth sensor has `visual_preset` and a writable `depth_units` only while it's on. Turning it on doesn't reset the software device, and it can't be turned off.
+
+Commands that need advanced mode call `advanced_mode.py:require_advanced_mode(ctx, yes)`: it asks before turning it on (it resets the device), raises `ConfirmationRequired` with no one to ask, and waits for the device to reconnect.
+
 `typings/pyrealsense2/__init__.pyi` is a partial stub for the pyrealsense2 API this project uses (the package ships no type information). Add any newly used pyrealsense2 call to it, or `ty` fails.
 
 - `RSCLI_DRIVER=mock` runs the CLI against the simulated D435, with a background thread pushing frames (`start_frame_pump()`).
@@ -60,6 +64,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 | `rs capture` | `commands/capture.py`, `png.py`, `npy.py` | Bounded run that saves framesets as PNGs and/or `.npy` arrays (`--format`) plus a `capture.json` sidecar |
 | `rs depth` | `commands/depth.py`, `depth.py` | Depth at a pixel or over a region, the median of each pixel's non-zero samples across a few frames |
 | `rs bag info` | `commands/bag.py`, `recording.py` | What a `.db3` recording holds: camera info, streams and frame counts |
+| `rs preset save` | `commands/preset.py`, `advanced_mode.py` | Save the device's preset file (librealsense's JSON), turning advanced mode on first |
 | `rs reset` | `cli.py` | Hardware reset |
 
 ### Key types (`types.py`)

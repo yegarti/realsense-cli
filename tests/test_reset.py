@@ -47,11 +47,6 @@ def test_yes_resets_without_prompt(resets):
     assert resets == [D435.serial]
 
 
-@pytest.fixture
-def tty(monkeypatch):
-    monkeypatch.setattr("realsense_cli.session._stdin_is_tty", lambda: True)
-
-
 def test_ambiguous_device_on_tty_prompts(resets, tty):
     result = runner.invoke(app, ["reset"], input="y\n")
     assert result.exit_code == 0, result.output
