@@ -36,12 +36,6 @@ def test_help_creates_no_context(no_context, args):
     assert "Usage" in result.output
 
 
-def test_bag_info_creates_no_context(no_context, bag):
-    result = runner.invoke(app, ["bag", "info", str(bag)])
-    assert result.exit_code == 0, result.output
-    assert "/device_0/info" in result.stdout
-
-
 def test_cli_import_skips_pyrealsense2():
     code = "import sys, realsense_cli.cli; assert 'pyrealsense2' not in sys.modules"
     subprocess.run([sys.executable, "-c", code], check=True)

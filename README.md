@@ -16,7 +16,7 @@
 - **Stream** selected profiles and monitor live FPS per stream
 - **Capture** framesets to PNG or NumPy `.npy` files with a JSON sidecar, to look at or load afterwards
 - **Measure** the depth at a pixel, or over a region of the depth image
-- **Inspect** ROS1 bag files without a full ROS installation
+- **Inspect** recordings: camera info, streams and frame counts
 - Multi-device support via `--serial`
 
 ---
@@ -411,13 +411,21 @@ outside is rejected, not clipped), and a depth stream that sends nothing for 3 s
 
 ---
 
-### `rs bag` — ROS bag inspection
+### `rs bag` — recording inspection
 
 ```sh
-rs bag info recording.bag
+rs bag info run.db3
 ```
 
-Displays bag duration and per-topic message counts without requiring a full ROS installation.
+Shows what a **recording** holds: its path and duration, the recorded device's camera info and
+sensors (as in `rs info`), and a table of its streams with each one's profile and frame count. It
+reads the file through librealsense's own playback, and never touches a connected camera.
+
+Only rosbag2 `.db3` recordings, the format librealsense records since 2.58.1, are supported. Any
+other file name, `.bag` included, exits `7`: convert an old `.bag` with librealsense's
+`convert_bag_to_db3` (`rs-convert -i in.bag -D out.db3`). A file that librealsense didn't record
+exits `7` too, and a recording without a single frame exits `9`. A stream that recorded no frames
+while others did is listed with `0` frames.
 
 ---
 
@@ -467,7 +475,7 @@ parsers.
 | `rs capture` | `{"directory", "files": [...]}`: absolute paths of the files written, `capture.json` last |
 | `rs depth X Y` | `{"profiles": [...], "frames", "depth_scale", "depth", "pixel": {"x", "y", "samples"}}`: `profiles` in `capture.json`'s shape, `depth` in meters rounded to 4 decimals and `null` with no depth, `samples` the frames that had depth there |
 | `rs depth [--roi X,Y,W,H]` | as above with `"region": {"x", "y", "width", "height", "pixels", "valid_pixels", "fill_rate", "min", "max", "mean", "median", "stddev"}` in place of `pixel`, and `depth` its median. `fill_rate` is a fraction from 0 to 1; with no valid pixels every statistic is `null`. The whole image has its coordinates filled in |
-| `rs bag info BAG` | `{"path", "duration", "topics": [{"name", "messages", "type"}]}` |
+| `rs bag info RECORDING` | `{"path", "duration", "device", "sensors", "streams": [{"sensor", "stream", "width", "height", "fps", "format", "index", "frames"}]}`: `path` absolute, `duration` in seconds, `device` and `sensors` as in `rs info`, each stream `rs stream list`'s profile plus its `frames` |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
 `rs stream play` needs `--frames` or `--duration` under `--json`; without them it runs until

@@ -6,6 +6,7 @@ import typer
 from loguru import logger
 from rich.live import Live
 
+from realsense_cli.commands.capture import profile_payload
 from realsense_cli.console import console, err_console
 from realsense_cli.driver.base import DriverProtocol
 from realsense_cli.errors import NoFrames
@@ -37,18 +38,7 @@ def stream_list(
         rs_sensors = driver.sensors
 
     sensor_profiles = [(s, p) for s in rs_sensors for p in driver.list_streams(s)]
-    payload = [
-        {
-            "sensor": sensor,
-            "stream": p.stream,
-            "width": p.resolution.width,
-            "height": p.resolution.height,
-            "fps": p.fps,
-            "format": p.format,
-            "index": p.index,
-        }
-        for sensor, p in sensor_profiles
-    ]
+    payload = [{"sensor": sensor} | profile_payload(p) for sensor, p in sensor_profiles]
     emit(ctx, {"profiles": payload}, lambda: list_profiles([p for _, p in sensor_profiles]))
 
 

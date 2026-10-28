@@ -121,15 +121,6 @@ def test_stream_list_all_sensors(driver):
     assert sensors == set(D435.sensors)
 
 
-def test_bag_info(bag):
-    result = invoke_json("bag", "info", str(bag))
-    assert result == {
-        "path": str(bag.absolute()),
-        "duration": pytest.approx(2.0),
-        "topics": [{"name": "/device_0/info", "messages": 2, "type": "std_msgs/msg/String"}],
-    }
-
-
 def test_reset(driver, monkeypatch):
     calls = []
     monkeypatch.setattr(driver, "reset", lambda timeout=None: calls.append(True))

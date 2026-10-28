@@ -12,7 +12,7 @@ from realsense_cli.errors import DeviceNotFound
 class Session:
     """
     Per-run CLI state, kept in `ctx.obj`. The driver is created on first use, so commands
-    that need no camera (`bag`, `--help`) never create an `rs.context`.
+    that need no camera (`bag`, `--help`) never reach a device.
     """
 
     def __init__(self, serial: str, json: bool = False):

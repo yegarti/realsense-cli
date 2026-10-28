@@ -40,7 +40,7 @@ CI (`.github/workflows/ci.yml`) runs `just check` on PRs and pushes to `main`. T
 
 All hardware interaction goes through the driver interface in `driver/base.py`. `driver/__init__.py:create_driver()` builds the `Realsense` driver (`driver/realsense.py`), which wraps `pyrealsense2`.
 
-The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the driver on first use. Commands that need a camera take `ctx: typer.Context` and call `require_device(ctx)`, which raises `DeviceNotFound` when none is connected; `rs list` uses `get_driver(ctx)`. Commands that need no camera (`bag`, `--help`) never create an `rs.context`, and `pyrealsense2` is imported only inside `create_driver()`, never at CLI import time.
+The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the driver on first use. Commands that need a camera take `ctx: typer.Context` and call `require_device(ctx)`, which raises `DeviceNotFound` when none is connected; `rs list` uses `get_driver(ctx)`. Commands that need no camera (`--help`) never create an `rs.context`; `bag` creates one only to open a file, never to reach a device. `pyrealsense2` is imported only inside `create_driver()` and `open_recording()`, never at CLI import time.
 
 `driver/software.py` simulates a D435 on `rs.software_device`, injected into the real driver with `Realsense(devices=[...])`. pyrealsense2 can't add a software device to an `rs.context`, so the pipeline can't see it, and `play()` on injected devices always streams through the sensor API. A software device only produces frames that are pushed to it: its Z16 frames hold a known depth pattern (`depth_pixels()`), every other stream a byte ramp.
 
@@ -59,7 +59,7 @@ The root callback puts a `Session` (`session.py`) in `ctx.obj`; it creates the d
 | `rs stream list/play` | `commands/stream.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream |
 | `rs capture` | `commands/capture.py`, `png.py`, `npy.py` | Bounded run that saves framesets as PNGs and/or `.npy` arrays (`--format`) plus a `capture.json` sidecar |
 | `rs depth` | `commands/depth.py`, `depth.py` | Depth at a pixel or over a region, the median of each pixel's non-zero samples across a few frames |
-| `rs bag info` | `commands/bag.py` | Inspect ROS bag files |
+| `rs bag info` | `commands/bag.py`, `recording.py` | What a `.db3` recording holds: camera info, streams and frame counts |
 | `rs reset` | `cli.py` | Hardware reset |
 
 ### Key types (`types.py`)
@@ -79,7 +79,7 @@ All output goes through the shared consoles in `console.py`: `console` for comma
 
 Commands build their result as a plain dict and pass it to `printer.emit(ctx, payload, table=...)`, which prints it as JSON under the global `--json` flag (shapes documented in the README) and otherwise calls the table renderer. `printer.py` handles Rich table formatting for device/profile/control listings. `stream_view.py` renders the live stream display using Rich Live.
 
-`rs_bag_parser.py` uses `rosbags` (the rosbag1 `Reader`) to parse ROS1 bag files without a ROS installation.
+`rs bag info` reads a recording through the SDK's playback device: `driver/__init__.py:open_recording()` builds the `Realsense` driver over it. First, `recording.py` checks the file with the stdlib `sqlite3` (a `.db3` that librealsense wrote, with frames, since playback hangs on a recording with none) and counts each stream's frames there.
 
 ### Errors
 
