@@ -4,6 +4,7 @@ Run with `just test -m hardware`.
 """
 
 import json
+import time
 
 import pytest
 from PIL import Image
@@ -82,3 +83,48 @@ def test_config_get_all_while_idle(camera_driver):
     values = json.loads(result.stdout)
     assert values["values"]["exposure"] > 0
     assert set(values["unavailable"]).isdisjoint(values["values"])
+
+
+def _advanced_mode_off(serial: str, timeout: float = 30) -> None:
+    """Turn advanced mode off on device SERIAL, which `rs` never does, and wait for it"""
+    import pyrealsense2 as rs
+
+    device = next(
+        d for d in rs.context().devices if d.get_info(rs.camera_info.serial_number) == serial
+    )
+    try:
+        rs.rs400_advanced_mode(device).toggle_advanced_mode(False)
+    except RuntimeError:  # the device can reboot before it acknowledges
+        pass
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        time.sleep(1)
+        try:
+            driver = Realsense()
+            driver.active_device = serial
+            if driver.advanced_mode() is False:
+                return
+        except Exception:  # still reconnecting
+            continue
+    pytest.fail(f"device '{serial}' did not come back with advanced mode off")
+
+
+def test_preset_save_turns_advanced_mode_on(camera_driver, tmp_path):
+    """
+    The real toggle resets the device, and the real `serialize_json` writes the file. Advanced
+    mode is turned off first, so this test ends with it on
+    """
+    serial = camera_driver.active_device
+    if camera_driver.advanced_mode() is None:
+        pytest.skip("the camera has no advanced mode")
+    if camera_driver.advanced_mode():
+        _advanced_mode_off(serial)
+    path = tmp_path / "preset.json"
+    result = runner.invoke(app, ["--json", "-s", serial, "preset", "save", str(path), "--yes"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["advanced_mode_enabled"] is True
+    preset = json.loads(path.read_text())
+    assert preset["schema version"] == 1
+    assert payload["keys"] == len(preset["parameters"])
+    assert "controls-laserpower" in preset["parameters"]

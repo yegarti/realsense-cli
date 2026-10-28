@@ -16,6 +16,7 @@ from realsense_cli.errors import InvalidProfile, InvalidValue, NoFrames
 from realsense_cli.printer import emit, list_paths
 from realsense_cli.session import require_device
 from realsense_cli.types import _STREAM_ALIASES, FrameSet, Image, Profile, Stream
+from realsense_cli.utils import new_path
 
 
 class FileFormat(StrEnum):
@@ -108,7 +109,7 @@ def rs_capture(
     A capture.json sidecar holds the profiles, frame metadata and depth scale.
     """
     if output is None:
-        output = _new_directory(f"rs-capture-{datetime.now():%Y%m%d-%H%M%S}")
+        output = new_path(f"rs-capture-{datetime.now():%Y%m%d-%H%M%S}")
     output = output.absolute()
     if output.exists() and not output.is_dir():
         raise InvalidValue(f"Output '{output}' is not a directory")
@@ -155,17 +156,6 @@ def profile_payload(profile: Profile) -> dict[str, Any]:
         "format": profile.format.upper(),
         "index": profile.index,
     }
-
-
-def _new_directory(name: str) -> Path:
-    """
-    ./NAME, or ./NAME-2, ./NAME-3 ... when it is taken, e.g. by a capture in the same second
-    """
-    path, n = Path(name), 1
-    while path.exists():
-        n += 1
-        path = Path(f"{name}-{n}")
-    return path
 
 
 def _with_format(profile: Profile, file_formats: list[FileFormat]) -> Profile:

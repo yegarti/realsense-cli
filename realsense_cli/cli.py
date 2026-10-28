@@ -14,6 +14,7 @@ from realsense_cli.commands.capture import rs_capture
 from realsense_cli.commands.config import config_app
 from realsense_cli.commands.depth import rs_depth
 from realsense_cli.commands.info import rs_info
+from realsense_cli.commands.preset import preset_app
 from realsense_cli.commands.stream import stream_app
 from realsense_cli.console import console, err_console
 from realsense_cli.errors import ConfirmationRequired, DeviceNotFound, RsCliError
@@ -102,6 +103,8 @@ app.add_typer(config_app, name="config")
 app.add_typer(stream_app, name="stream")
 
 app.add_typer(bag_app, name="bag")
+
+app.add_typer(preset_app, name="preset")
 
 
 RESET_WAIT_TIMEOUT = 30

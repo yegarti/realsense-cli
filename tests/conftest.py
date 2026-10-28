@@ -12,7 +12,13 @@ import pytest
 from loguru import logger
 
 from realsense_cli.driver.realsense import Realsense
-from realsense_cli.driver.software import D435, D435_SENSORS, SoftwareCamera, d435
+from realsense_cli.driver.software import (
+    D435,
+    D435_SENSORS,
+    SoftwareCamera,
+    d435,
+    software_driver,
+)
 from realsense_cli.types import Frame, FrameSet, Profile
 
 
@@ -61,11 +67,17 @@ def inject_driver(monkeypatch):
 
 
 @pytest.fixture
+def tty(monkeypatch):
+    """Commands see a terminal they can prompt on; CliRunner's stdin isn't one."""
+    monkeypatch.setattr("realsense_cli.session._stdin_is_tty", lambda: True)
+
+
+@pytest.fixture
 def make_driver(inject_driver):
     """Build the real driver over a software camera, also served to CLI commands."""
 
     def make(camera: SoftwareCamera) -> Realsense:
-        return inject_driver(Realsense(devices=[camera.device]))
+        return inject_driver(software_driver(camera))
 
     return make
 

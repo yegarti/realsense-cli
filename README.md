@@ -17,6 +17,7 @@
 - **Capture** framesets to PNG or NumPy `.npy` files with a JSON sidecar, to look at or load afterwards
 - **Measure** the depth at a pixel, or over a region of the depth image
 - **Inspect** recordings: camera info, streams and frame counts
+- **Save** a device's preset file, in librealsense's own JSON
 - Multi-device support via `--serial`
 
 ---
@@ -429,6 +430,34 @@ while others did is listed with `0` frames.
 
 ---
 
+### `rs preset` — preset files
+
+```sh
+rs preset save                        # the device's preset file, in ./rs-preset-<timestamp>.json
+rs preset save tuning.json            # ...in tuning.json
+rs preset save tuning.json --force    # overwrite an existing file
+rs preset save tuning.json --yes      # turn advanced mode on without asking, if it's off
+```
+```
+Saved 74 keys to tuning.json
+```
+
+A **preset file** holds the device's depth tuning (its advanced controls) and depth and color
+controls, such as laser power and exposure, as **preset keys** (`param-rsmdiffthreshold`,
+`controls-laserpower`, ...). `rs preset save` writes it exactly as librealsense's
+`serialize_json()` does, so the RealSense Viewer can load it. An existing FILE is refused with exit
+code `7` unless `--force` is given. The default, `./rs-preset-<timestamp>.json`, is always new: a
+save in the same second gets `-2`, `-3`, ... appended.
+
+Preset files need **advanced mode**. When it's off, `rs preset` asks before turning it on, since
+turning it on resets the device; `--yes` skips the question. Without a terminal to ask on, or
+under `--json`, it fails with exit code `8` instead of asking. It then waits up to 30 seconds for
+the device to reconnect (exit code `3` if it doesn't). Advanced mode stays on across power cycles,
+and `rs` never turns it off. A device without advanced mode (D457, the GMSL variants) fails with
+exit code `1`.
+
+---
+
 ### `rs reset` — hardware reset
 
 ```sh
@@ -476,6 +505,7 @@ parsers.
 | `rs depth X Y` | `{"profiles": [...], "frames", "depth_scale", "depth", "pixel": {"x", "y", "samples"}}`: `profiles` in `capture.json`'s shape, `depth` in meters rounded to 4 decimals and `null` with no depth, `samples` the frames that had depth there |
 | `rs depth [--roi X,Y,W,H]` | as above with `"region": {"x", "y", "width", "height", "pixels", "valid_pixels", "fill_rate", "min", "max", "mean", "median", "stddev"}` in place of `pixel`, and `depth` its median. `fill_rate` is a fraction from 0 to 1; with no valid pixels every statistic is `null`. The whole image has its coordinates filled in |
 | `rs bag info RECORDING` | `{"path", "duration", "device", "sensors", "streams": [{"sensor", "stream", "width", "height", "fps", "format", "index", "frames"}]}`: `path` absolute, `duration` in seconds, `device` and `sensors` as in `rs info`, each stream `rs stream list`'s profile plus its `frames` |
+| `rs preset save [FILE]` | `{"saved", "keys", "advanced_mode_enabled"}`: `saved` the file's absolute path, `keys` the number of preset keys written, `advanced_mode_enabled` `true` when this run turned advanced mode on |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
 `rs stream play` needs `--frames` or `--duration` under `--json`; without them it runs until
@@ -501,12 +531,12 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `0` | Success |
 | `1` | Other or unexpected error |
 | `2` | Invalid command-line usage |
-| `3` | No device connected, none matches `--serial`, or a reset device didn't reconnect |
+| `3` | No device connected, none matches `--serial`, or a device didn't reconnect after a reset or after turning on advanced mode |
 | `4` | Unknown sensor |
 | `5` | Unknown control |
 | `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile; for `rs capture`, a stream or stream format it can't save in a file format asked for; for `rs depth`, a device without a depth sensor) |
-| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, or an `rs depth` pixel or region outside the depth image |
-| `8` | Confirmation needed: several devices connected, add `--serial` or `--yes` |
+| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, an existing `rs preset save` file, or an `rs depth` pixel or region outside the depth image |
+| `8` | Confirmation needed: several devices connected (add `--serial` or `--yes`), or advanced mode is off (add `--yes`) |
 | `9` | A stream in a bounded `rs stream play`, `rs capture` or `rs depth` received no frames, or stopped sending them for 3 seconds |
 | `10` | A control the sensor lists but can't read right now (e.g. a temperature while not streaming) |
 | `130` | Interrupted (Ctrl+C) |

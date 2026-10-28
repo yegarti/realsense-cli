@@ -20,11 +20,11 @@ def create_driver() -> "DriverProtocol":
         case "realsense":
             return Realsense()
         case "mock":
-            from realsense_cli.driver.software import d435
+            from realsense_cli.driver.software import d435, software_driver
 
             camera = d435()
             camera.start_frame_pump()
-            return Realsense(devices=[camera.device])
+            return software_driver(camera)
         case t:
             raise RsCliError(f"Unknown RSCLI_DRIVER '{t}'. Valid drivers: realsense, mock")
 
