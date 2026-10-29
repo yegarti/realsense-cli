@@ -72,9 +72,11 @@ def device_details(
         table.add_row(name.replace("_", " ").title(), value)
     table.add_row("Sensors", "\n".join(map(sensor_label, sensors)))
     console.print(table)
-    if calibration is None:
-        return
+    if calibration is not None:
+        list_calibration(calibration)
 
+
+def list_calibration(calibration: Calibration) -> None:
     list_intrinsics(calibration.intrinsics)
     list_distortion(calibration.intrinsics)
 
@@ -209,8 +211,8 @@ def list_options(
     console.print(table)
 
 
-def list_options_values(options_values: dict[str, Any]):
-    table = Table(box=box.SIMPLE)
+def list_options_values(options_values: dict[str, Any], title: str | None = None):
+    table = Table(title=title, box=box.SIMPLE)
     table.add_column("Name")
     table.add_column("Value")
 
@@ -310,8 +312,11 @@ def list_profiles(profiles: list[Profile], title: str = "Streams"):
     console.print(table)
 
 
-def recording_details(payload: dict[str, Any]) -> None:
-    """`rs bag info`'s result, from its JSON payload: the file, its device, then its streams"""
+def recording_details(payload: dict[str, Any], calibration: Calibration | None = None) -> None:
+    """
+    `rs bag info`'s result, from its JSON payload: the file, its device, its streams, then
+    CALIBRATION and the payload's controls when given
+    """
     table = Table(box=box.SIMPLE, show_header=False)
     table.add_column()
     # a long path wraps instead of losing its end
@@ -338,3 +343,7 @@ def recording_details(payload: dict[str, Any]) -> None:
             str(stream["frames"]),
         )
     console.print(table)
+    if calibration is not None:
+        list_calibration(calibration)
+    for controls in payload.get("controls", []):
+        list_options_values(controls["values"], title=f"{controls['sensor']} Controls")

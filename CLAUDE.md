@@ -63,7 +63,7 @@ Commands that need advanced mode call `advanced_mode.py:require_advanced_mode(ct
 | `rs stream list/play` | `commands/stream.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream |
 | `rs capture` | `commands/capture.py`, `png.py`, `npy.py` | Bounded run that saves framesets as PNGs, `.npy` arrays and/or `.raw` bytes (`--format`) plus a `capture.json` sidecar |
 | `rs depth` | `commands/depth.py`, `depth.py` | Depth at a pixel or over a region, the median of each pixel's non-zero samples across a few frames |
-| `rs bag info` | `commands/bag.py`, `recording.py` | What a `.db3` recording holds: camera info, streams and frame counts |
+| `rs bag info` | `commands/bag.py`, `recording.py` | What a `.db3` recording holds: camera info, streams and frame counts; with `--calibration` / `--controls`, calibration and control values at the start |
 | `rs preset save` | `commands/preset.py`, `advanced_mode.py` | Save the device's preset file (librealsense's JSON), turning advanced mode on first |
 | `rs reset` | `cli.py` | Hardware reset |
 

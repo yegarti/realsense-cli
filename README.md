@@ -423,6 +423,8 @@ outside is rejected, not clipped), and a depth stream that sends nothing for 3 s
 
 ```sh
 rs bag info run.db3
+rs bag info run.db3 --calibration   # ...and the recorded streams' intrinsics and extrinsics
+rs bag info run.db3 --controls      # ...and each sensor's control values when recording started
 ```
 
 Shows what a **recording** holds: its path and duration, the recorded device's camera info and
@@ -434,6 +436,12 @@ other file name, `.bag` included, exits `7`: convert an old `.bag` with libreals
 `convert_bag_to_db3` (`rs-convert -i in.bag -D out.db3`). A file that librealsense didn't record
 exits `7` too, and a recording without a single frame exits `9`. A stream that recorded no frames
 while others did is listed with `0` frames.
+
+`--calibration` adds `rs info --all-profiles`' Intrinsics, Distortion and Extrinsics tables, for
+the recorded profiles only. `--controls` adds a Controls table per sensor, as `rs config get`
+shows them, with each control's value at the start of the recording: changes made while recording
+aren't shown. Pieces a recording lacks, such as extrinsics for the motion streams or a sensor with
+no controls, are left out.
 
 ---
 
@@ -512,6 +520,7 @@ parsers.
 | `rs depth X Y` | `{"profiles": [...], "frames", "depth_scale", "depth", "pixel": {"x", "y", "samples"}}`: `profiles` in `capture.json`'s shape, `depth` in meters rounded to 4 decimals and `null` with no depth, `samples` the frames that had depth there |
 | `rs depth [--roi X,Y,W,H]` | as above with `"region": {"x", "y", "width", "height", "pixels", "valid_pixels", "fill_rate", "min", "max", "mean", "median", "stddev"}` in place of `pixel`, and `depth` its median. `fill_rate` is a fraction from 0 to 1; with no valid pixels every statistic is `null`. The whole image has its coordinates filled in |
 | `rs bag info RECORDING` | `{"path", "duration", "device", "sensors", "streams": [{"sensor", "stream", "width", "height", "fps", "format", "index", "frames"}]}`: `path` absolute, `duration` in seconds, `device` and `sensors` as in `rs info`, each stream `rs stream list`'s profile plus its `frames` |
+| `rs bag info --calibration` / `--controls` | also `"intrinsics"` and `"extrinsics"` as in `rs info PROFILES...`, for the recorded profiles; and `"controls": [{"sensor", "values": {"<control>": <value>}}]`, as in `rs config get`, with the values at the recording start |
 | `rs preset save [FILE]` | `{"saved", "keys", "advanced_mode_enabled"}`: `saved` the file's absolute path, `keys` the number of preset keys written, `advanced_mode_enabled` `true` when this run turned advanced mode on |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
