@@ -121,3 +121,78 @@ def test_recording_without_camera_info_is_not_a_recording(recording, tmp_path):
     result = runner.invoke(app, ["--json", "bag", "info", str(path)])
     error = json_error(result, InvalidValue.exit_code)
     assert "/device_0/info" in error["message"]
+
+
+def test_calibration_json_matches_rs_info(recording, driver):
+    recorded = ["depth-640x480-30-z16", "color-640x480-30-rgb8"]
+    expected = invoke_json("info", *recorded)
+    result = invoke_json("bag", "info", "--calibration", str(recording))
+    assert result["intrinsics"] == expected["intrinsics"]
+    assert result["extrinsics"] == expected["extrinsics"]
+    assert "controls" not in result
+
+
+def test_calibration_holds_recorded_profiles_only(recording):
+    result = invoke_json("bag", "info", "--calibration", str(recording))
+    assert [(i["stream"], i["width"], i["fps"]) for i in result["intrinsics"]] == [
+        ("Depth", 640, [30]),
+        ("Color", 640, [30]),
+    ]
+    # the motion streams have no intrinsics, nor extrinsics in the recording: left out
+    assert {(e["from"], e["to"]) for e in result["extrinsics"]} == {
+        ("Depth", "Color"),
+        ("Color", "Depth"),
+    }
+
+
+def test_controls_json_matches_config_get(recording, driver):
+    result = invoke_json("bag", "info", "--controls", str(recording))
+    assert "intrinsics" not in result
+    expected = [
+        {"sensor": sensor, "values": invoke_json("config", "get", sensor, "--all")["values"]}
+        for sensor in D435.sensors
+    ]
+    # the recorder writes the host-side queue size as 0, whatever it was
+    for controls in result["controls"]:
+        assert controls["values"].pop("frames_queue_size") == 0
+    for controls in expected:
+        del controls["values"]["frames_queue_size"]
+    assert result["controls"] == expected
+
+
+def test_controls_show_values_at_the_recording_start(recording, tmp_path):
+    path = shutil.copy(recording, tmp_path / "run.db3")
+    topic = "/device_0/sensor_0/option/Laser_Power/value"
+    with closing(sqlite3.connect(path)) as db, db:
+        topic_id, start = db.execute(
+            "SELECT topics.id, timestamp FROM messages"
+            " JOIN topics ON topics.id = messages.topic_id WHERE topics.name = ?",
+            (topic,),
+        ).fetchone()
+        (end,) = db.execute("SELECT MAX(timestamp) FROM messages").fetchone()
+        # a std_msgs/String in CDR: encapsulation header, length, then the NUL-ended text
+        text = b"30.000000\0"
+        data = b"\0\1\0\0" + len(text).to_bytes(4, "little") + text
+        db.execute(
+            "INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)",
+            (topic_id, max(start + 1, end), data),
+        )
+    controls = invoke_json("bag", "info", "--controls", str(path))["controls"]
+    assert controls[0]["values"]["laser_power"] == 150.0
+
+
+def test_calibration_and_controls_tables(recording):
+    result = runner.invoke(app, ["bag", "info", "--calibration", "--controls", str(recording)])
+    assert result.exit_code == 0, result.output
+    for title in ("Streams", "Intrinsics", "Distortion", "Extrinsics"):
+        assert title in result.stdout
+    for sensor in D435.sensors:
+        assert f"{sensor} Controls" in result.stdout
+    assert "laser_power" in result.stdout
+
+
+def test_tables_leave_out_calibration_and_controls_by_default(recording):
+    result = runner.invoke(app, ["bag", "info", str(recording)])
+    assert result.exit_code == 0, result.output
+    assert "Intrinsics" not in result.stdout
+    assert "Controls" not in result.stdout

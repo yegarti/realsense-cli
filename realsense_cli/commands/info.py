@@ -44,11 +44,11 @@ def rs_info(
     calibration = None
     if profiles or all_profiles:
         calibration = driver.calibration(profiles or None)
-        payload |= _calibration_payload(calibration)
+        payload |= calibration_payload(calibration)
     emit(ctx, payload, lambda: device_details(camera_info, sensors, calibration))
 
 
-def _calibration_payload(calibration: Calibration) -> dict[str, Any]:
+def calibration_payload(calibration: Calibration) -> dict[str, Any]:
     return {
         "intrinsics": [
             {

@@ -52,7 +52,7 @@ def config_get(
     resolved = resolve_sensor_name(sensor)
     if all_controls:
         controls = [opt.name for opt in driver.list_controls(resolved)]
-        values, unavailable = _read_available(driver, resolved, controls)
+        values, unavailable = read_available(driver, resolved, controls)
     elif controls:
         values, unavailable = driver.get_control_values(resolved, controls), []
     else:
@@ -128,7 +128,7 @@ def config_restore(
         raise typer.Exit(InvalidValue.exit_code)
 
 
-def _read_available(
+def read_available(
     driver: DriverProtocol, sensor: str, controls: list[str]
 ) -> tuple[dict[str, float], list[str]]:
     """
