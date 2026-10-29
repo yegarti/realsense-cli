@@ -42,7 +42,15 @@ from realsense_cli.types import (
     Stream,
 )
 
-_BYTES_PER_PIXEL: dict[str, int] = {"z16": 2, "y8": 1, "rgb8": 3, "bgr8": 3, "yuyv": 2}
+_BYTES_PER_PIXEL: dict[str, int] = {
+    "z16": 2,
+    "y8": 1,
+    "y16": 2,
+    "rgb8": 3,
+    "bgr8": 3,
+    "yuyv": 2,
+    "uyvy": 2,
+}
 
 
 @dataclass

@@ -24,12 +24,19 @@ class FileFormat(StrEnum):
 
     PNG = "png"
     NPY = "npy"
+    RAW = "raw"
 
 
-# The stream formats each file format holds, and its encoder
-_ENCODERS: dict[str, tuple[tuple[str, ...], Callable[[Image], bytes]]] = {
+def _raw(image: Image) -> bytes:
+    """IMAGE's bytes as the SDK handed them out, rows packed, with no header"""
+    return image.data
+
+
+# The stream formats each file format holds (None: any video stream format), and its encoder
+_ENCODERS: dict[str, tuple[tuple[str, ...] | None, Callable[[Image], bytes]]] = {
     FileFormat.PNG: (png.FORMATS, png.encode),
     FileFormat.NPY: (npy.FORMATS, npy.encode),
+    FileFormat.RAW: (None, _raw),
 }
 
 # The format a stream is captured in when its profile leaves the format unset
@@ -41,6 +48,10 @@ _DEFAULT_FORMATS: dict[str, str] = {
 }
 
 _FILE_STEMS: dict[str, str] = {stream: alias for alias, stream in _STREAM_ALIASES.items()}
+
+_VIDEO_STREAMS_ONLY = "capture saves video streams: " + ", ".join(
+    _FILE_STEMS[s] for s in _DEFAULT_FORMATS
+)
 
 # Seconds a capture waits for a stream's next frame before failing, as a bounded stream play
 FRAME_TIMEOUT = 3.0
@@ -106,6 +117,8 @@ def rs_capture(
 
     NPY: each frame as a NumPy array of the values as the camera sent them.
 
+    RAW: each frame's bytes as the camera sent them, in any stream format, with no header.
+
     A capture.json sidecar holds the profiles, frame metadata and depth scale.
     """
     if output is None:
@@ -163,10 +176,12 @@ def _with_format(profile: Profile, file_formats: list[FileFormat]) -> Profile:
     PROFILE, in the stream's default capture format when it leaves the format unset. Its
     stream format must suit each of FILE_FORMATS
     """
+    if profile.stream in (Stream.GYRO, Stream.ACCEL):
+        raise InvalidProfile(f"Can't capture '{profile.stream}': {_VIDEO_STREAMS_ONLY}")
     if profile.format != "any":
         for file_format in file_formats:
             stream_formats, _ = _ENCODERS[file_format]
-            if profile.format.lower() not in stream_formats:
+            if stream_formats is not None and profile.format.lower() not in stream_formats:
                 raise InvalidProfile(
                     f"Can't capture '{profile}' as {file_format.upper()}: "
                     f"{file_format.upper()} files hold stream formats "
@@ -174,10 +189,7 @@ def _with_format(profile: Profile, file_formats: list[FileFormat]) -> Profile:
                 )
         return profile
     if profile.stream not in _DEFAULT_FORMATS:
-        streams = ", ".join(_FILE_STEMS[s] for s in _DEFAULT_FORMATS)
-        raise InvalidProfile(
-            f"Can't capture '{profile.stream}': capture saves video streams: {streams}"
-        )
+        raise InvalidProfile(f"Can't capture '{profile.stream}': {_VIDEO_STREAMS_ONLY}")
     return replace(profile, format=_DEFAULT_FORMATS[profile.stream])
 
 

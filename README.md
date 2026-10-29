@@ -14,7 +14,7 @@
 - **Show** a device's details and calibration (intrinsics, extrinsics)
 - **Configure** sensor controls (exposure, gain, laser power, etc.)
 - **Stream** selected profiles and monitor live FPS per stream
-- **Capture** framesets to PNG or NumPy `.npy` files with a JSON sidecar, to look at or load afterwards
+- **Capture** framesets to PNG, NumPy `.npy` or raw files with a JSON sidecar, to look at or load afterwards
 - **Measure** the depth at a pixel, or over a region of the depth image
 - **Inspect** recordings: camera info, streams and frame counts
 - **Save** a device's preset file, in librealsense's own JSON
@@ -320,6 +320,7 @@ rs capture depth infrared color --frames 5 # 5 framesets of three streams
 rs capture color-1280x720-30 -o shots      # into ./shots
 rs capture --warmup 3                      # let auto-exposure settle for 3 seconds
 rs capture --format npy --format png       # NumPy arrays as well as PNGs
+rs capture color-640x480-30-yuyv --format raw   # the frame's bytes, in any stream format
 ```
 ```
 /home/me/rs-capture-20261021-143005/depth-0.png
@@ -330,8 +331,8 @@ rs capture --format npy --format png       # NumPy arrays as well as PNGs
 
 Profiles take the `rs stream play` syntax. A profile that leaves the format unset is captured in
 Z16 for depth, Y8 for infrared and RGB8 for color; Y16, BGR8, RGBA8 and BGRA8 can be asked for,
-and YUYV with `--format npy`. Each stream gets a file per frameset, named after its alias and the
-frameset's number, padded so the files sort in order (`depth-00.png` to `depth-11.png` for `--frames 12`):
+YUYV with `--format npy`, and any stream format the device offers with `--format raw`. Each
+stream gets a file per frameset, named after its alias and the frameset's number, padded so the files sort in order (`depth-00.png` to `depth-11.png` for `--frames 12`):
 
 | Stream | Files |
 |---|---|
@@ -346,14 +347,20 @@ profile sets. Each file format's files share the PNG file names, with their own 
 |---|---|
 | `png` | as above; BGR(A) is stored as RGB(A). `depth-N-colorized.png` is written only with `png` |
 | `npy` | `depth-N.npy`, `color-N.npy` ...: a NumPy array of the values as the camera sent them, for `numpy.load` |
+| `raw` | `depth-N.raw`, `color-N.raw` ...: the frame's bytes as the camera sent them, rows packed with no padding, no header. Takes any video stream format (YUYV, UYVY, Y12I, RAW16 ...) |
 
-| Stream format | `.npy` dtype and shape |
-|---|---|
-| Z16, Y16 | `uint16 (H, W)`; depth is the raw values, as in `depth-N.png` (multiply by the depth scale for meters; 0 is no depth) |
-| Y8 | `uint8 (H, W)` |
-| RGB8, BGR8 | `uint8 (H, W, 3)`; BGR8 stays in BGR order |
-| RGBA8, BGRA8 | `uint8 (H, W, 4)`; BGRA8 stays in BGRA order |
-| YUYV | `uint8 (H, W, 2)` as sent: `Y0 U`, `Y1 V` for each pair of pixels. PNG can't hold it |
+| Stream format | `.npy` dtype and shape | `.raw` size |
+|---|---|---|
+| Z16, Y16 | `uint16 (H, W)`; depth is the raw values, as in `depth-N.png` (multiply by the depth scale for meters; 0 is no depth) | W × H × 2 |
+| Y8 | `uint8 (H, W)` | W × H |
+| RGB8, BGR8 | `uint8 (H, W, 3)`; BGR8 stays in BGR order | W × H × 3 |
+| RGBA8, BGRA8 | `uint8 (H, W, 4)`; BGRA8 stays in BGRA order | W × H × 4 |
+| YUYV | `uint8 (H, W, 2)` as sent: `Y0 U`, `Y1 V` for each pair of pixels. PNG can't hold it | W × H × 2 |
+| Others (UYVY, Y12I, RAW16 ...) | NPY can't hold them | W × H × bytes per pixel of the stream format |
+
+Values wider than a byte in a `.raw` file (Z16, Y16, RAW16 ...) are little-endian. Load one with
+`numpy.fromfile("depth-0.raw", "<u2").reshape(480, 640)`, the shape from the profile in
+`capture.json`.
 
 A profile must suit every file format asked for; otherwise the capture fails with exit code `6`,
 naming the file format that can't hold it.
