@@ -385,7 +385,7 @@ class FakeAdvancedMode:
         self.groups = {name: struct() for name, struct in _GROUPS.items()}
         for name, fields in D435_DEFAULT_TUNING.items():
             for field_name, value in fields.items():
-                self.groups[name][field_name] = value
+                setattr(self.groups[name], field_name, value)
         depth = camera.sensor(Sensor.STEREO_MODULE)
         self._depth_units = depth.get_option_range(rs.option.depth_units)
         camera.device.register_info(rs.camera_info.advanced_mode, "YES" if enabled else "NO")
@@ -418,11 +418,11 @@ class FakeAdvancedMode:
         sensors = {sensor.name: sensor for sensor in self._camera.device.sensors}
         # librealsense keeps the depth units in the depth table, in micrometers
         depth_units = sensors[Sensor.STEREO_MODULE].get_option(rs.option.depth_units)
-        self.groups["depth_table"]["depthUnits"] = round(depth_units * 1e6)
+        self.groups["depth_table"].depthUnits = round(depth_units * 1e6)
 
         parameters = {}
         for key, (group, field_name, scale) in _PRESET_KEYS.items():
-            value = self.groups[group][field_name]
+            value = getattr(self.groups[group], field_name)
             if key == "param-usersm":
                 value = 0 if value > 0 else 1
             parameters[key] = _preset_value(value / scale)
