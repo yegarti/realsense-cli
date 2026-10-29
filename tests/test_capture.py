@@ -386,3 +386,118 @@ def test_unknown_file_format_is_usage_error(driver, tmp_path):
     result = runner.invoke(app, ["--json", "capture", "--format", "z16", "-o", str(tmp_path)])
     assert result.exit_code == 2, result.output
     assert "--format" in json.loads(result.stderr)["error"]["message"]
+
+
+def test_raw_is_saved_as_sent_in_any_stream_format(feed, tmp_path):
+    result = invoke_json(
+        "capture",
+        "depth",
+        "color-640x480-30-yuyv",
+        "--format",
+        "raw",
+        "--warmup",
+        "0",
+        "-o",
+        str(tmp_path),
+    )
+    assert [Path(f).name for f in result["files"]] == [
+        "depth-0.raw",
+        "color-0.raw",
+        "capture.json",
+    ]
+    sidecar = json.loads((tmp_path / "capture.json").read_text())
+    [[depth, color]] = [frameset["frames"] for frameset in sidecar["framesets"]]
+    assert (depth["files"], color["files"]) == (["depth-0.raw"], ["color-0.raw"])
+    # width × height × bytes per pixel, the pushed bytes with no header
+    raw_depth = (tmp_path / "depth-0.raw").read_bytes()
+    assert len(raw_depth) == 640 * 480 * 2
+    assert raw_depth == depth_pixels(640, 480, depth["frame_number"])
+    raw_color = (tmp_path / "color-0.raw").read_bytes()
+    assert len(raw_color) == 640 * 480 * 2
+    assert raw_color == pixels(640 * 480 * 2, color["frame_number"])
+
+
+def test_raw_and_npy_hold_the_same_bytes(feed, tmp_path):
+    invoke_json(
+        "capture",
+        "depth",
+        "--format",
+        "raw",
+        "--format",
+        "npy",
+        "--warmup",
+        "0",
+        "-o",
+        str(tmp_path),
+    )
+    depth = numpy.load(tmp_path / "depth-0.npy")
+    assert (tmp_path / "depth-0.raw").read_bytes() == depth.astype("<u2").tobytes()
+
+
+def _uyvy_camera() -> SoftwareCamera:
+    color = Profile(Stream.COLOR, Resolution(4, 2), 30, "uyvy", 0)
+    return SoftwareCamera(D435, [SensorSpec(Sensor.RGB_CAMERA, [color])])
+
+
+@pytest.mark.parametrize("camera", [_uyvy_camera], indirect=True)
+def test_uyvy_is_saved_only_as_raw(feed, tmp_path):
+    invoke_json(
+        "capture", "color-0x0-0-uyvy", "--format", "raw", "--warmup", "0", "-o", str(tmp_path)
+    )
+    sidecar = json.loads((tmp_path / "capture.json").read_text())
+    [[color]] = [frameset["frames"] for frameset in sidecar["framesets"]]
+    assert sidecar["profiles"][0]["format"] == "UYVY"
+    assert (tmp_path / "color-0.raw").read_bytes() == pixels(4 * 2 * 2, color["frame_number"])
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "capture",
+            "color-0x0-0-uyvy",
+            "--format",
+            "raw",
+            "--format",
+            "npy",
+            "-o",
+            str(tmp_path / "out"),
+        ],
+    )
+    error = json_error(result, InvalidProfile.exit_code)
+    assert "as NPY" in error["message"]
+    assert not (tmp_path / "out").exists()
+
+
+def test_raw_with_png_refuses_what_png_cannot_hold(driver, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "capture",
+            "color-640x480-30-yuyv",
+            "--format",
+            "raw",
+            "--format",
+            "png",
+            "-o",
+            str(tmp_path / "out"),
+        ],
+    )
+    error = json_error(result, InvalidProfile.exit_code)
+    assert "as PNG" in error["message"]
+
+
+def test_raw_still_captures_only_video_streams(driver, tmp_path):
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "capture",
+            "gyro-0x0-0-motion_xyz32f",
+            "--format",
+            "raw",
+            "-o",
+            str(tmp_path / "out"),
+        ],
+    )
+    error = json_error(result, InvalidProfile.exit_code)
+    assert "video streams" in error["message"]
