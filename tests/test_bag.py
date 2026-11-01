@@ -1,6 +1,8 @@
 import shutil
 import sqlite3
 from contextlib import closing
+from importlib.metadata import version
+from typing import Any
 
 import pyrealsense2 as rs
 import pytest
@@ -13,6 +15,21 @@ from tests.conftest import RECORDED, record
 from tests.test_json import invoke_json, json_error
 
 runner = CliRunner()
+
+# pyrealsense2 2.58 records intrinsics to 6 significant digits, and plays a recording back with
+# each control's last recorded value rather than its first
+SDK_2_58 = version("pyrealsense2").startswith("2.58.")
+
+
+def _significant(value: Any, digits: int = 6) -> Any:
+    """VALUE with every float in it rounded to DIGITS significant digits"""
+    if isinstance(value, float):
+        return float(f"{value:.{digits}g}")
+    if isinstance(value, dict):
+        return {k: _significant(v, digits) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_significant(v, digits) for v in value]
+    return value
 
 
 def _stream(sensor: str, stream: str, width: int, fps: int, fmt: str) -> dict:
@@ -127,7 +144,9 @@ def test_calibration_json_matches_rs_info(recording, driver):
     recorded = ["depth-640x480-30-z16", "color-640x480-30-rgb8"]
     expected = invoke_json("info", *recorded)
     result = invoke_json("bag", "info", "--calibration", str(recording))
-    assert result["intrinsics"] == expected["intrinsics"]
+    assert _significant(result["intrinsics"]) == _significant(expected["intrinsics"])
+    if not SDK_2_58:
+        assert result["intrinsics"] == expected["intrinsics"]
     assert result["extrinsics"] == expected["extrinsics"]
     assert "controls" not in result
 
@@ -160,6 +179,7 @@ def test_controls_json_matches_config_get(recording, driver):
     assert result["controls"] == expected
 
 
+@pytest.mark.skipif(SDK_2_58, reason="pyrealsense2 2.58 plays back the last recorded value")
 def test_controls_show_values_at_the_recording_start(recording, tmp_path):
     path = shutil.copy(recording, tmp_path / "run.db3")
     topic = "/device_0/sensor_0/option/Laser_Power/value"
