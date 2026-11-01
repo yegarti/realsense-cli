@@ -3,6 +3,7 @@ import time
 from collections import defaultdict
 from collections.abc import Callable
 from itertools import permutations
+from pathlib import Path
 from typing import Protocol
 
 import pyrealsense2 as rs
@@ -139,6 +140,7 @@ class Realsense:
         self._pipe_profile: rs.pipeline_profile | None = None
         self._frame_queue: rs.frame_queue = rs.frame_queue(capacity=_FRAME_QUEUE_CAPACITY)
         self._colorizer: rs.colorizer = rs.colorizer()
+        self._recorder: rs.recorder | None = None
 
     def _setup(self) -> None:
         self._query()
@@ -322,8 +324,37 @@ class Realsense:
         self._streaming = True
         return started
 
-    def _stream_sensor(self, profiles: list[Profile] | None) -> list[Profile]:
+    def record(self, path: Path, profiles: list[Profile] | None = None) -> list[Profile]:
+        """
+        Start streaming PROFILES through the sensor API, recording them to PATH, a `.db3` file
+        the SDK creates (replacing any file there) once the profiles are found; a device that
+        then fails to start leaves no file. The recording ends with `stop()`; the profiles the
+        device actually started
+        """
+        logger.info("Recording profiles {} to {}", profiles, path)
+        rs_profiles = self._sensor_profiles(profiles)
+        # wraps the live device's sensors: frames they deliver are written as they arrive.
+        # The driver keeps streaming on the live device, as the recorder's own sensors report
+        # no options
+        self._recorder = rs.recorder(str(path), self._device)
         self._stream_method = "sensor"
+        try:
+            started = self._start_sensors(rs_profiles)
+        except BaseException:
+            # sensors started before the failing one, and the recorder
+            self.stop()
+            path.unlink(missing_ok=True)
+            raise
+        self._streaming = True
+        return started
+
+    def _stream_sensor(self, profiles: list[Profile] | None) -> list[Profile]:
+        return self._start_sensors(self._sensor_profiles(profiles))
+
+    def _sensor_profiles(
+        self, profiles: list[Profile] | None
+    ) -> dict[str, list[rs.stream_profile]]:
+        """The device's profiles matching PROFILES (its defaults when empty), by sensor"""
         if not profiles:
             profiles = self._default_profiles()
         sensor_profiles = {}
@@ -359,7 +390,12 @@ class Realsense:
 
         if not rs_stream_profiles:
             raise InvalidProfile(f"The device has no default profiles. {_PROFILES_HINT}")
+        return rs_stream_profiles
 
+    def _start_sensors(
+        self, rs_stream_profiles: dict[str, list[rs.stream_profile]]
+    ) -> list[Profile]:
+        self._stream_method = "sensor"
         for sensor, rs_profiles in rs_stream_profiles.items():
             logger.info(f"Starting stream for {sensor} with {rs_profiles}")
             rs_sensor = self._get_sensor(sensor)
@@ -513,6 +549,8 @@ class Realsense:
                 if rs_sensor.get_active_streams():
                     rs_sensor.stop()
                     rs_sensor.close()
+        # releasing the recorder flushes what it still holds to the file and closes it
+        self._recorder = None
         self._streaming = False
 
     def depth_scale(self) -> float | None:

@@ -325,7 +325,37 @@ def recording_details(payload: dict[str, Any], calibration: Calibration | None =
     table.add_row("Duration", f"{payload['duration']:g} seconds")
     console.print(table)
     device_details(payload["device"], payload["sensors"])
+    _recorded_streams(payload["streams"])
+    if calibration is not None:
+        list_calibration(calibration)
+    for controls in payload.get("controls", []):
+        list_options_values(controls["values"], title=f"{controls['sensor']} Controls")
 
+
+def recording_summary(payload: dict[str, Any]) -> None:
+    """`rs bag record`'s result, from its JSON payload: the file, then its streams"""
+    table = Table(box=box.SIMPLE, show_header=False)
+    table.add_column()
+    table.add_column(overflow="fold")
+    table.add_row("Recording", payload["path"])
+    table.add_row("Duration", f"{payload['duration']:g} seconds")
+    table.add_row("Size", _size(payload["size"]))
+    console.print(table)
+    _recorded_streams(payload["streams"])
+
+
+def _size(size: int) -> str:
+    """SIZE bytes in decimal units, as `ls -h --si` shows them"""
+    value, unit = float(size), "bytes"
+    for larger in ("kB", "MB", "GB"):
+        if value < 1000:
+            break
+        value, unit = value / 1000, larger
+    return f"{size} bytes" if unit == "bytes" else f"{value:.1f} {unit}"
+
+
+def _recorded_streams(streams: list[dict[str, Any]]) -> None:
+    """A recording's streams, each with its profile and frame count"""
     table = Table(title="Streams", box=box.SIMPLE)
     table.add_column("Sensor")
     table.add_column("Stream")
@@ -333,7 +363,7 @@ def recording_details(payload: dict[str, Any], calibration: Calibration | None =
     table.add_column("FPS", justify="right")
     table.add_column("Format")
     table.add_column("Frames", justify="right")
-    for stream in payload["streams"]:
+    for stream in streams:
         table.add_row(
             stream["sensor"],
             stream["stream"],
@@ -343,7 +373,3 @@ def recording_details(payload: dict[str, Any], calibration: Calibration | None =
             str(stream["frames"]),
         )
     console.print(table)
-    if calibration is not None:
-        list_calibration(calibration)
-    for controls in payload.get("controls", []):
-        list_options_values(controls["values"], title=f"{controls['sensor']} Controls")

@@ -16,7 +16,7 @@
 - **Stream** selected profiles and monitor live FPS per stream
 - **Capture** framesets to PNG, NumPy `.npy` or raw files with a JSON sidecar, to look at or load afterwards
 - **Measure** the depth at a pixel, or over a region of the depth image
-- **Inspect** recordings: camera info, streams and frame counts
+- **Record** streams to a `.db3` recording, and **inspect** recordings: camera info, streams and frame counts
 - **Save** a device's preset file, in librealsense's own JSON
 - Multi-device support via `--serial`
 
@@ -419,9 +419,11 @@ outside is rejected, not clipped), and a depth stream that sends nothing for 3 s
 
 ---
 
-### `rs bag` — recording inspection
+### `rs bag` — recordings
 
 ```sh
+rs bag record depth color --duration 10 -o run.db3   # record depth and color for 10 seconds
+rs bag record                                        # every default stream, until Ctrl-C
 rs bag info run.db3
 rs bag info run.db3 --calibration   # ...and the recorded streams' intrinsics and extrinsics
 rs bag info run.db3 --controls      # ...and each sensor's control values when recording started
@@ -442,6 +444,47 @@ the recorded profiles only. `--controls` adds a Controls table per sensor, as `r
 shows them, with each control's value at the start of the recording: changes made while recording
 aren't shown. Pieces a recording lacks, such as extrinsics for the motion streams or a sensor with
 no controls, are left out.
+
+**Recording.** `rs bag record [PROFILES...]` records a run to a **recording**, the rosbag2 `.db3`
+file librealsense writes: device and sensor info, every control's value, each stream's profile,
+intrinsics and extrinsics, then every frame with its metadata. Profiles use the
+[`stream play` syntax](#rs-stream--streaming), any stream format included; without any, every
+stream the device starts by default is recorded, motion included. It streams through the sensor
+API, so there's no `--pipe/--sensor`.
+
+```
+  Recording   /home/me/run.db3
+  Duration    10.012 seconds
+  Size        368.6 MB
+
+                            Streams
+  Sensor          Stream   Resolution   FPS   Format   Frames
+ ─────────────────────────────────────────────────────────────
+  Stereo Module   Depth    640x480       30   Z16         300
+  RGB Camera      Color    640x480       30   RGB8        300
+```
+
+- `-o/--output FILE` names the file, by default `./rs-recording-<YYYYmmdd-HHMMSS>.db3` (`-2`,
+  `-3` ... when taken). It must end in `.db3` (any case), or the command exits `7` before touching
+  the camera. Missing directories are created. An existing file exits `7` too; `-f/--force`
+  replaces it.
+- `--frames N` stops once every stream has N frames, `--duration S` after S seconds; given both,
+  whichever comes first. Without either, it records until Ctrl-C. Under `--json` one of them is
+  required (exit code `2`).
+- Ctrl-C ends any recording normally: the file is kept, the summary printed, and the exit code is
+  `0`.
+- A stream that sends nothing for 3 seconds fails the run with exit code `9`, as does a Ctrl-C
+  before the first frame. A failed run deletes its file.
+
+The summary counts each stream's frames in the closed file, as `rs bag info` does, so the two
+always agree. A stream that recorded nothing while others did shows `0` frames. The duration is
+the wall-clock time from the first frame to the stop.
+
+Compression is the SDK's default for the camera model: lossless on for the D435, off for the
+D435i, D455, D405 and D436. The recorder has no back-pressure: when the disk can't keep up, frames
+pile up in memory instead of being dropped, most likely for an uncompressed recording (depth and
+color at 640x480, 30 FPS write about 37 MB/s). Changing a control while recording is recorded on a
+real camera, but not on the simulated one (`RSCLI_DRIVER=mock`).
 
 ---
 
@@ -520,12 +563,13 @@ parsers.
 | `rs depth X Y` | `{"profiles": [...], "frames", "depth_scale", "depth", "pixel": {"x", "y", "samples"}}`: `profiles` in `capture.json`'s shape, `depth` in meters rounded to 4 decimals and `null` with no depth, `samples` the frames that had depth there |
 | `rs depth [--roi X,Y,W,H]` | as above with `"region": {"x", "y", "width", "height", "pixels", "valid_pixels", "fill_rate", "min", "max", "mean", "median", "stddev"}` in place of `pixel`, and `depth` its median. `fill_rate` is a fraction from 0 to 1; with no valid pixels every statistic is `null`. The whole image has its coordinates filled in |
 | `rs bag info RECORDING` | `{"path", "duration", "device", "sensors", "streams": [{"sensor", "stream", "width", "height", "fps", "format", "index", "frames"}]}`: `path` absolute, `duration` in seconds, `device` and `sensors` as in `rs info`, each stream `rs stream list`'s profile plus its `frames` |
+| `rs bag record` | `{"path", "duration", "size", "streams": [{"sensor", "stream", "width", "height", "fps", "format", "index", "frames"}]}`: `path` absolute, `duration` in seconds from the first frame to the stop, `size` in bytes, `streams` the profiles started, each with the frames in the file |
 | `rs bag info --calibration` / `--controls` | also `"intrinsics"` and `"extrinsics"` as in `rs info PROFILES...`, for the recorded profiles; and `"controls": [{"sensor", "values": {"<control>": <value>}}]`, as in `rs config get`, with the values at the recording start |
 | `rs preset save [FILE]` | `{"saved", "keys", "advanced_mode_enabled"}`: `saved` the file's absolute path, `keys` the number of preset keys written, `advanced_mode_enabled` `true` when this run turned advanced mode on |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
-`rs stream play` needs `--frames` or `--duration` under `--json`; without them it runs until
-interrupted and fails with exit code `2`. Under `--json` the live view is off, so stdout holds
+`rs stream play` and `rs bag record` need `--frames` or `--duration` under `--json`; without them
+they run until interrupted, and fail with exit code `2`. Under `--json` the live view is off, so stdout holds
 only the summary.
 
 With `--json`, an error is a JSON object on the last line of stderr (warnings such as the
@@ -551,8 +595,8 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `4` | Unknown sensor |
 | `5` | Unknown control |
 | `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile; for `rs capture`, a stream or stream format it can't save in a file format asked for; for `rs depth`, a device without a depth sensor) |
-| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, an existing `rs preset save` file, or an `rs depth` pixel or region outside the depth image |
+| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, an existing `rs preset save` file, an `rs bag record` output that exists or doesn't end in `.db3`, or an `rs depth` pixel or region outside the depth image |
 | `8` | Confirmation needed: several devices connected (add `--serial` or `--yes`), or advanced mode is off (add `--yes`) |
-| `9` | A stream in a bounded `rs stream play`, `rs capture` or `rs depth` received no frames, or stopped sending them for 3 seconds |
+| `9` | A stream in a bounded `rs stream play`, `rs capture`, `rs depth` or any `rs bag record` received no frames, or stopped sending them for 3 seconds; an `rs bag record` stopped before the first frame; a recording with no frames |
 | `10` | A control the sensor lists but can't read right now (e.g. a temperature while not streaming) |
 | `130` | Interrupted (Ctrl+C) |

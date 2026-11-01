@@ -1,4 +1,5 @@
 import time
+from collections.abc import Callable
 from contextlib import nullcontext
 from typing import Annotated
 
@@ -13,7 +14,7 @@ from realsense_cli.errors import NoFrames
 from realsense_cli.printer import emit, list_frame_counts, list_profiles
 from realsense_cli.session import json_output, require_device
 from realsense_cli.stream_view import StreamView
-from realsense_cli.types import _STREAM_ALIASES, Profile, resolve_sensor_name
+from realsense_cli.types import _STREAM_ALIASES, FrameSet, Profile, resolve_sensor_name
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
 
@@ -124,7 +125,8 @@ def stream_play(
                         logger.warning("Frames didn't arrive until timeout")
                         continue
                     view.update(frameset)
-            counts = _count_frames(driver, view, started, frames, duration)
+            counts = dict.fromkeys(started, 0)
+            count_frames(driver, counts, frames, duration, view.update)
     finally:
         err_console.print("Stopping all streams")
         driver.stop()
@@ -132,30 +134,32 @@ def stream_play(
     missing = [stream for stream, n in counts.items() if n == 0]
     if missing:
         raise NoFrames(
-            f"No frames arrived from {', '.join(missing)}. {_received_summary(counts)}"
+            f"No frames arrived from {', '.join(missing)}. {received_summary(counts)}"
         )
     payload = {"streams": [{"stream": s, "frames": n} for s, n in counts.items()]}
     emit(ctx, payload, lambda: list_frame_counts(counts))
 
 
-def _received_summary(counts: dict[str, int]) -> str:
+def received_summary(counts: dict[str, int]) -> str:
     received = ", ".join(f"{stream} {n}" for stream, n in counts.items()) or "none"
     return f"Frames received: {received}"
 
 
-def _count_frames(
+def count_frames(
     driver: DriverProtocol,
-    view: StreamView,
-    streams: list[str],
+    counts: dict[str, int],
     frames: int | None,
     duration: float | None,
-) -> dict[str, int]:
+    on_frameset: Callable[[FrameSet], None],
+) -> None:
     """
-    New frames received per stream until each of STREAMS received FRAMES frames or DURATION
-    seconds passed. STREAMS start at 0, so a stream that got nothing still shows up. A stream
-    still short of FRAMES that sends nothing for FRAME_TIMEOUT seconds fails the run
+    Add the new frames received per stream to COUNTS until each of its streams has FRAMES
+    frames or DURATION seconds passed; neither means until interrupted. COUNTS is filled as
+    frames arrive, so it holds what arrived even when the run is cut short. Each frameset is
+    handed to ON_FRAMESET. A stream still short of FRAMES that sends nothing for FRAME_TIMEOUT
+    seconds fails the run
     """
-    counts = dict.fromkeys(streams, 0)
+    streams = list(counts)
     started = time.monotonic()
     last_frame = dict.fromkeys(streams, started)
     last_index: dict[str, int] = {}
@@ -171,7 +175,7 @@ def _count_frames(
         if stalled:
             raise NoFrames(
                 f"No frames arrived from {', '.join(stalled)} within {FRAME_TIMEOUT:g}s. "
-                f"{_received_summary(counts)}"
+                f"{received_summary(counts)}"
             )
         # wake up in time to notice the first stall, or the deadline
         timeout = min(last_frame[s] for s in waiting) + FRAME_TIMEOUT - now
@@ -188,5 +192,4 @@ def _count_frames(
             last_index[stream] = frame.index
             counts[stream] = counts.get(stream, 0) + 1
             last_frame[stream] = now
-        view.update(frameset)
-    return counts
+        on_frameset(frameset)
