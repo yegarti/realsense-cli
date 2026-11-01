@@ -17,7 +17,7 @@
 - **Capture** framesets to PNG, NumPy `.npy` or raw files with a JSON sidecar, to look at or load afterwards
 - **Measure** the depth at a pixel, or over a region of the depth image
 - **Record** streams to a `.db3` recording, and **inspect** recordings: camera info, streams and frame counts
-- **Save** a device's preset file, in librealsense's own JSON
+- **Save** a device's preset file, in librealsense's own JSON, and **load** one onto a device
 - Multi-device support via `--serial`
 
 ---
@@ -499,9 +499,12 @@ rs preset save                        # the device's preset file, in ./rs-preset
 rs preset save tuning.json            # ...in tuning.json
 rs preset save tuning.json --force    # overwrite an existing file
 rs preset save tuning.json --yes      # turn advanced mode on without asking, if it's off
+rs preset load tuning.json            # load a preset file onto the device
+rs preset load tuning.json --no-validate   # hand the file to the SDK without checking its values
 ```
 ```
 Saved 74 keys to tuning.json
+Loaded preset tuning.json onto Intel RealSense D435 (012345678)
 ```
 
 A **preset file** holds the device's depth tuning (its advanced controls) and depth and color
@@ -510,6 +513,20 @@ controls, such as laser power and exposure, as **preset keys** (`param-rsmdiffth
 `serialize_json()` does, so the RealSense Viewer can load it. An existing FILE is refused with exit
 code `7` unless `--force` is given. The default, `./rs-preset-<timestamp>.json`, is always new: a
 save in the same second gets `-2`, `-3`, ... appended.
+
+`rs preset load` takes that format, and the legacy flat one (preset keys alone, as in the
+[Visual Presets wiki](https://github.com/IntelRealSense/librealsense/wiki/D400-Series-Visual-Presets)).
+Keys the file leaves out keep their values. librealsense silently loads a value it can't read as
+`0`, so `rs` checks the file first: valid JSON, `"schema version"` `1` with `"parameters"` (or the
+flat format), and every value a number or one of `off`, `on`, `auto`, `True`, `False`. It lists
+every bad key and exits with code `7` before touching the device; `--no-validate` skips the value
+check. The SDK refuses a key the device doesn't have, or a file from another product line (a D415
+preset loads on a D435, a D400 one not on a D500), also with exit code `7` and nothing written. A
+missing file is a usage error (exit code `2`).
+
+A load also sets `visual_preset` to `custom`. To undo one, `rs config restore depth` writes
+`visual_preset` back to its default, which reapplies the built-in tuning; there is no
+`rs preset restore`.
 
 Preset files need **advanced mode**. When it's off, `rs preset` asks before turning it on, since
 turning it on resets the device; `--yes` skips the question. Without a terminal to ask on, or
@@ -570,6 +587,7 @@ parsers.
 | `rs bag record` | `{"path", "duration", "size", "streams": [{"sensor", "stream", "width", "height", "fps", "format", "index", "frames"}]}`: `path` absolute, `duration` in seconds from the first frame to the stop, `size` in bytes, `streams` the profiles started, each with the frames in the file |
 | `rs bag info --calibration` / `--controls` | also `"intrinsics"` and `"extrinsics"` as in `rs info PROFILES...`, for the recorded profiles; and `"controls": [{"sensor", "values": {"<control>": <value>}}]`, as in `rs config get`, with the values at the recording start |
 | `rs preset save [FILE]` | `{"saved", "keys", "advanced_mode_enabled"}`: `saved` the file's absolute path, `keys` the number of preset keys written, `advanced_mode_enabled` `true` when this run turned advanced mode on |
+| `rs preset load FILE` | `{"loaded", "advanced_mode_enabled"}`: `loaded` the file's absolute path, `advanced_mode_enabled` `true` when this run turned advanced mode on |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
 `rs stream play` and `rs bag record` need `--frames` or `--duration` under `--json`; without them
@@ -599,7 +617,7 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `4` | Unknown sensor |
 | `5` | Unknown control |
 | `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile; for `rs capture`, a stream or stream format it can't save in a file format asked for; for `rs depth`, a device without a depth sensor) |
-| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, an existing `rs preset save` file, an `rs bag record` output that exists or doesn't end in `.db3`, or an `rs depth` pixel or region outside the depth image |
+| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, an existing `rs preset save` file, an `rs preset load` file that isn't a preset, has an invalid value or that the device refuses, an `rs bag record` output that exists or doesn't end in `.db3`, or an `rs depth` pixel or region outside the depth image |
 | `8` | Confirmation needed: several devices connected (add `--serial` or `--yes`), or advanced mode is off (add `--yes`) |
 | `9` | A stream in a bounded `rs stream play`, `rs capture`, `rs depth` or any `rs bag record` received no frames, or stopped sending them for 3 seconds; an `rs bag record` stopped before the first frame; a recording with no frames |
 | `10` | A control the sensor lists but can't read right now (e.g. a temperature while not streaming) |

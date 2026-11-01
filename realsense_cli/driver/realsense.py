@@ -91,6 +91,8 @@ class AdvancedMode(Protocol):
 
     def serialize_json(self) -> str: ...
 
+    def load_json(self, json_content: str) -> None: ...
+
 
 class Realsense:
     """
@@ -651,6 +653,17 @@ class Realsense:
         The active device's preset file, in the JSON librealsense writes. Needs advanced mode on
         """
         return self._require_advanced_mode().serialize_json()
+
+    def load_preset(self, preset: str) -> None:
+        """
+        Load PRESET, a preset file's JSON, onto the active device. Needs advanced mode on. The
+        SDK's refusals (an unknown key, another product line) raise `InvalidValue`
+        """
+        advanced_mode = self._require_advanced_mode()
+        try:
+            advanced_mode.load_json(preset)
+        except RuntimeError as e:
+            raise InvalidValue(f"The device refused the preset: {e}") from None
 
     def _advanced_mode(self) -> AdvancedMode | None:
         if self._injected_devices is not None:

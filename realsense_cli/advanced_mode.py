@@ -20,6 +20,13 @@ YesOption = Annotated[
 ]
 
 
+def device_label(driver: DriverProtocol) -> str:
+    """The active device as messages name it: `<name> (<serial>)`"""
+    serial = driver.active_device
+    name = next(d.name for d in driver.query_devices() if d.serial == serial)
+    return f"{name} ({serial})"
+
+
 def require_advanced_mode(ctx: typer.Context, yes: bool) -> tuple[DriverProtocol, bool]:
     """
     The driver, with advanced mode on on its active device, and whether this run turned it on.
@@ -28,8 +35,7 @@ def require_advanced_mode(ctx: typer.Context, yes: bool) -> tuple[DriverProtocol
     """
     driver = require_device(ctx)
     serial = driver.active_device
-    name = next(d.name for d in driver.query_devices() if d.serial == serial)
-    device = f"{name} ({serial})"
+    device = device_label(driver)
     enabled = driver.advanced_mode()
     if enabled is None:
         raise RsCliError(f"{device} has no advanced mode")

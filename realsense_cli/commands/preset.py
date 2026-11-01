@@ -5,13 +5,14 @@ from typing import Annotated
 
 import typer
 
-from realsense_cli.advanced_mode import YesOption, require_advanced_mode
+from realsense_cli.advanced_mode import YesOption, device_label, require_advanced_mode
 from realsense_cli.console import console
 from realsense_cli.errors import InvalidValue
+from realsense_cli.preset import read_preset
 from realsense_cli.printer import emit
 from realsense_cli.utils import new_path
 
-preset_app = typer.Typer(help="Save preset files", no_args_is_help=True)
+preset_app = typer.Typer(help="Save and load preset files", no_args_is_help=True)
 
 
 @preset_app.command(
@@ -43,4 +44,50 @@ def preset_save(
     keys = len(json.loads(preset)["parameters"])
     path.write_text(preset)
     payload = {"saved": str(path), "keys": keys, "advanced_mode_enabled": enabled}
-    emit(ctx, payload, lambda: console.print(f"Saved {keys} keys to {file}"))
+    emit(
+        ctx,
+        payload,
+        lambda: console.print(f"Saved {keys} keys to {file}", soft_wrap=True, markup=False),
+    )
+
+
+@preset_app.command(
+    name="load",
+    help="Load a preset file onto the device: librealsense's JSON, as the Viewer or rs preset "
+    "save writes it. Turns advanced mode on first if it's off, which resets the device. "
+    "rs config restore depth undoes it",
+)
+def preset_load(
+    ctx: typer.Context,
+    file: Annotated[
+        Path,
+        typer.Argument(
+            metavar="FILE",
+            exists=True,
+            dir_okay=False,
+            readable=True,
+            help="Preset file to load",
+            show_default=False,
+        ),
+    ],
+    no_validate: Annotated[
+        bool,
+        typer.Option(
+            "--no-validate",
+            help="Hand the file to the SDK without checking its values; the SDK loads a value "
+            "it can't read as 0",
+        ),
+    ] = False,
+    yes: YesOption = False,
+):
+    preset = read_preset(file, validate=not no_validate)
+    driver, enabled = require_advanced_mode(ctx, yes)
+    driver.load_preset(preset)
+    payload = {"loaded": str(file.absolute()), "advanced_mode_enabled": enabled}
+    emit(
+        ctx,
+        payload,
+        lambda: console.print(
+            f"Loaded preset {file} onto {device_label(driver)}", soft_wrap=True, markup=False
+        ),
+    )
