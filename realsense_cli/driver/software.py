@@ -20,6 +20,9 @@ every profile of both.
 """
 
 import json
+import math
+import re
+import struct
 import threading
 import time
 from array import array
@@ -333,6 +336,19 @@ _PRESET_KEYS: dict[str, tuple[str, str, float]] = {
     "param-amplitude-factor": ("amp_factor", "a_factor", 1),
 }
 
+# The keys librealsense accepts and ignores on load: read-only duplicates and stream settings
+_IGNORED_KEYS = {
+    *(f"param-colorcorrection{i}" for i in range(1, 13)),
+    "param-regionspatialthresholdu",
+    "param-regionspatialthresholdv",
+    "aux-param-disparitymultiplier",
+    "stream-depth-format",
+    "stream-ir-format",
+    "stream-width",
+    "stream-height",
+    "stream-fps",
+}
+
 _AUTO = {0: "False", 1: "True"}
 
 # The preset keys librealsense writes for controls, when the sensor has the control:
@@ -374,6 +390,18 @@ _PRESET_CONTROLS: dict[str, tuple[str, str, dict[float, str] | None]] = {
         _AUTO,
     ),
 }
+
+# The control keys librealsense writes only while another control on the same sensor allows
+# it, as `set_all()` does: key -> (that control, its value that skips the key)
+_SKIPPED_WHEN: dict[str, tuple[str, float]] = {
+    "controls-laserpower": ("emitter_enabled", 0),
+    "controls-autoexposure-manual": ("enable_auto_exposure", 1),
+    "controls-depth-gain": ("enable_auto_exposure", 1),
+    "controls-color-autoexposure-manual": ("enable_auto_exposure", 1),
+    "controls-color-white-balance-manual": ("enable_auto_white_balance", 1),
+}
+
+_VISUAL_PRESET_CUSTOM = 0  # rs.rs400_visual_preset.custom
 
 
 class FakeAdvancedMode:
@@ -434,11 +462,7 @@ class FakeAdvancedMode:
             if key == "param-usersm":
                 value = 0 if value > 0 else 1
             parameters[key] = _preset_value(value / scale)
-        for key, (sensor_name, control, names) in _PRESET_CONTROLS.items():
-            sensor = sensors.get(sensor_name)
-            option = rs.option.__members__[control]
-            if sensor is None or option not in sensor.get_supported_options():
-                continue
+        for key, (sensor, option, names) in self._controls().items():
             value = sensor.get_option(option)
             parameters[key] = names[value] if names else _preset_value(value)
 
@@ -454,6 +478,120 @@ class FakeAdvancedMode:
             "schema version": 1,
         }
         return json.dumps(preset, indent=4, sort_keys=True)
+
+    def load_json(self, json_content: str) -> None:
+        """
+        Load a preset file as librealsense does: check the envelope and the product line, and
+        fail on a key the camera doesn't have, before writing anything. Then overlay the file's
+        keys on the current values and set `visual_preset` to custom. A value it can't parse
+        loads as 0, as in the SDK
+        """
+        if not self._enabled:
+            raise RuntimeError("load_json(...) failed! Device is not in Advanced-Mode.")
+        try:
+            preset = json.loads(json_content)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"invalid preset JSON: {e}") from None
+        parameters = self._parameters(preset)
+        controls = self._controls()
+        for key in parameters:
+            if key not in _PRESET_KEYS and key not in controls and key not in _IGNORED_KEYS:
+                raise RuntimeError(f"{key} key is not supported by the connected device!")
+
+        for key, value in parameters.items():
+            if key not in _PRESET_KEYS:
+                continue
+            group, field_name, scale = _PRESET_KEYS[key]
+            number = _atof(value)
+            if key == "param-usersm":
+                number = 0 if number > 0 else 1
+            fields = self.groups[group]
+            if isinstance(getattr(fields, field_name), int):
+                setattr(fields, field_name, max(0, math.floor(number * scale + 0.5)))
+            else:
+                setattr(fields, field_name, number * scale)
+        depth = self._camera.sensor(Sensor.STEREO_MODULE)
+        if {"param-depthunits", "param-zunits"} & parameters.keys():
+            _set_float_option(
+                depth, rs.option.depth_units, self.groups["depth_table"].depthUnits / 1e6
+            )
+
+        # the controls that turn others on or off first, as `set_all()` writes them
+        keys = [key for key in controls if key in parameters]
+        keys.sort(key=lambda key: key in _SKIPPED_WHEN)
+        for key in keys:
+            sensor, option, names = controls[key]
+            if key in _SKIPPED_WHEN:
+                gate, skipped = _SKIPPED_WHEN[key]
+                gate_option = rs.option.__members__[gate]
+                if gate_option in sensor.get_supported_options() and (
+                    sensor.get_option(gate_option) == skipped
+                ):
+                    continue
+            value = parameters[key]
+            if names:
+                number = {name: v for v, name in names.items()}.get(str(value), 0)
+            else:
+                number = _atof(value)
+            sensor.set_option(option, number)
+        depth.set_option(rs.option.visual_preset, _VISUAL_PRESET_CUSTOM)
+
+    def _parameters(self, preset: object) -> dict:
+        """The preset keys of PRESET, after the envelope and product-line checks"""
+        if not isinstance(preset, dict):
+            raise RuntimeError("preset file is corrupt, cannot validate schema")
+        if "schema version" not in preset and "parameters" not in preset:
+            return preset
+        if "schema version" not in preset or "parameters" not in preset:
+            raise RuntimeError("preset file is corrupt, cannot validate schema")
+        if preset["schema version"] != 1:
+            raise RuntimeError("mismatch on schema version")
+        device = self._camera.device
+        product_line = preset.get("device", {}).get("product line")
+        if (
+            product_line is not None
+            and device.supports(rs.camera_info.product_line)
+            and product_line != device.get_info(rs.camera_info.product_line)
+        ):
+            raise RuntimeError("preset product line does not match the connected device")
+        return preset["parameters"]
+
+    def _controls(self) -> dict[str, tuple[rs.sensor, rs.option, dict[float, str] | None]]:
+        """The control keys the camera has: key -> (sensor, option, the names of its values)"""
+        sensors = {sensor.name: sensor for sensor in self._camera.device.sensors}
+        controls = {}
+        for key, (sensor_name, control, names) in _PRESET_CONTROLS.items():
+            sensor = sensors.get(sensor_name)
+            option = rs.option.__members__[control]
+            if sensor is not None and option in sensor.get_supported_options():
+                controls[key] = (sensor, option, names)
+        return controls
+
+
+def _set_float_option(sensor: rs.sensor, option: rs.option, value: float) -> None:
+    """
+    Set OPTION to VALUE, or to a float32 a few steps away. A software sensor checks a value
+    against its option's step in float32, and rejects some values on the step grid, such as
+    the default 0.001 depth units: librealsense writes depth units through the depth table,
+    which has no such check
+    """
+    bits = struct.unpack("<i", struct.pack("<f", value))[0]
+    for offset in (0, 1, -1, 2, -2, 3, -3, 4, -4):
+        nearby = struct.unpack("<f", struct.pack("<i", bits + offset))[0]
+        try:
+            sensor.set_option(option, nearby)
+            return
+        except RuntimeError:
+            continue
+    raise RuntimeError(f"the simulated sensor can't hold {option.name} {value:g}")
+
+
+def _atof(value: object) -> float:
+    """VALUE as librealsense reads a number: C's `atof`, the leading number or 0"""
+    if isinstance(value, int | float):
+        return float(value)
+    match = re.match(r"\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?", str(value))
+    return float(match.group()) if match else 0.0
 
 
 def _preset_value(value: float) -> str:

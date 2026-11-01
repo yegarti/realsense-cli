@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 
 from realsense_cli.cli import app
 from realsense_cli.driver.realsense import Realsense
+from realsense_cli.types import Sensor
 
 pytestmark = pytest.mark.hardware
 
@@ -128,6 +129,42 @@ def test_preset_save_turns_advanced_mode_on(camera_driver, tmp_path):
     assert preset["schema version"] == 1
     assert payload["keys"] == len(preset["parameters"])
     assert "controls-laserpower" in preset["parameters"]
+
+
+def test_preset_load_restores_a_saved_preset(camera_driver, tmp_path):
+    """
+    The real `serialize_json` -> `load_json` round trip: loading a file the device wrote
+    restores what changed since. Turns advanced mode on if it's off
+    """
+    serial = camera_driver.active_device
+    if camera_driver.advanced_mode() is None:
+        pytest.skip("the camera has no advanced mode")
+    path = tmp_path / "preset.json"
+    cli = ["--json", "-s", serial, "preset"]
+    result = runner.invoke(app, [*cli, "save", str(path), "--yes"])
+    assert result.exit_code == 0, result.output
+    saved = json.loads(path.read_text())["parameters"]
+
+    # librealsense writes the laser power only with the emitter on
+    if saved.get("controls-laserstate") != "on":
+        pytest.skip("the emitter is off, so a load leaves the laser power alone")
+
+    # the save may have reset the device, so find it again
+    driver = Realsense()
+    driver.active_device = serial
+    stereo = Sensor.STEREO_MODULE
+    laser = next(o for o in driver.list_controls(stereo) if o.name == "laser_power")
+    power = float(saved["controls-laserpower"])
+    driver.set_control_values(
+        stereo,
+        {"laser_power": laser.max_value if power == laser.min_value else laser.min_value},
+    )
+    assert json.loads(driver.serialize_preset())["parameters"] != saved
+
+    result = runner.invoke(app, [*cli, "load", str(path)])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == {"loaded": str(path), "advanced_mode_enabled": False}
+    assert json.loads(driver.serialize_preset())["parameters"] == saved
 
 
 def test_bag_record_defaults(camera_driver, tmp_path):
