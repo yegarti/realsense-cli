@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Protocol
 
 from realsense_cli.types import Calibration, DeviceInfo, FrameSet, Option, Profile
@@ -28,6 +29,8 @@ class DriverProtocol(Protocol):
     def play(
         self, profiles: list[Profile] | None = None, pipeline: bool = True
     ) -> list[Profile]: ...
+
+    def record(self, path: Path, profiles: list[Profile] | None = None) -> list[Profile]: ...
 
     def calibration(self, profiles: list[Profile] | None = None) -> Calibration: ...
 

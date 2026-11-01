@@ -128,3 +128,26 @@ def test_preset_save_turns_advanced_mode_on(camera_driver, tmp_path):
     assert preset["schema version"] == 1
     assert payload["keys"] == len(preset["parameters"])
     assert "controls-laserpower" in preset["parameters"]
+
+
+def test_bag_record_defaults(camera_driver, tmp_path):
+    """
+    The recorder wraps a real device, whose UVC sensors it records through the same hooks as
+    the software device's. Depth only: an uncompressed color stream can stall for over 3
+    seconds on a slow link, such as USB/IP
+    """
+    path = tmp_path / "run.db3"
+    result = runner.invoke(
+        app, ["--json", "bag", "record", "depth", "--frames", "10", "-o", str(path)]
+    )
+    assert result.exit_code == 0, result.output
+    recorded = json.loads(result.stdout)
+    assert recorded["size"] == path.stat().st_size > 0
+    assert all(stream["frames"] >= 10 for stream in recorded["streams"])
+
+    result = runner.invoke(app, ["--json", "bag", "info", str(path)])
+    assert result.exit_code == 0, result.output
+    frames = {
+        (s["stream"], s["index"]): s["frames"] for s in json.loads(result.stdout)["streams"]
+    }
+    assert frames == {(s["stream"], s["index"]): s["frames"] for s in recorded["streams"]}
