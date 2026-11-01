@@ -445,6 +445,10 @@ shows them, with each control's value at the start of the recording: changes mad
 aren't shown. Pieces a recording lacks, such as extrinsics for the motion streams or a sensor with
 no controls, are left out.
 
+With pyrealsense2 2.58, `--controls` shows each control's last recorded value instead of its
+first, as that SDK's playback does, and a recording made with it holds intrinsics rounded to 6
+significant digits.
+
 **Recording.** `rs bag record [PROFILES...]` records a run to a **recording**, the rosbag2 `.db3`
 file librealsense writes: device and sensor info, every control's value, each stream's profile,
 intrinsics and extrinsics, then every frame with its metadata. Profiles use the
