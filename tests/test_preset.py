@@ -16,7 +16,7 @@ from realsense_cli.driver.software import (
     d435,
     software_driver,
 )
-from realsense_cli.preset import valid_value
+from realsense_cli.preset import preset_changes, valid_value
 from realsense_cli.types import Sensor
 from tests.test_json import invoke_json, json_error
 
@@ -280,6 +280,61 @@ def test_load_reports_a_relative_file_as_absolute(driver, tmp_path, monkeypatch)
     assert invoke_json("preset", "load", "preset.json")["loaded"] == str(
         tmp_path / "preset.json"
     )
+
+
+def test_load_without_diff_reports_no_changes(driver, tmp_path):
+    path = _write(tmp_path / "preset.json", {"controls-laserpower": "60"})
+    assert "changed" not in invoke_json("preset", "load", str(path))
+    result = runner.invoke(app, ["preset", "load", str(path)])
+    assert "preset keys" not in result.stdout
+
+
+def test_load_diff_lists_the_changed_keys(driver, tmp_path):
+    path = _write(
+        tmp_path / "preset.json",
+        {
+            "controls-laserpower": "60",
+            "param-rsmdiffthreshold": "3.5",
+            "param-censususize": "9",
+        },
+    )
+    assert invoke_json("preset", "load", "--diff", str(path))["changed"] == [
+        {"key": "controls-laserpower", "old": "150", "new": "60"},
+        {"key": "param-rsmdiffthreshold", "old": "4", "new": "3.5"},
+    ]
+
+
+def test_load_diff_prints_a_table_after_the_loaded_line(driver, tmp_path):
+    path = _write(tmp_path / "preset.json", {"controls-laserpower": "60"})
+    result = runner.invoke(app, ["preset", "load", "--diff", str(path)])
+    assert result.exit_code == 0, result.output
+    loaded = result.stdout.index("Loaded preset")
+    table = result.stdout.index("Changed preset keys")
+    assert loaded < table
+    assert re.search(r"Key\s+Old\s+New", result.stdout)
+    assert re.search(r"controls-laserpower\s+150\s+60", result.stdout)
+
+
+def test_load_diff_of_a_load_that_changes_nothing_is_empty(driver, tmp_path):
+    path = tmp_path / "preset.json"
+    invoke_json("preset", "save", str(path))
+    assert invoke_json("preset", "load", "--diff", str(path))["changed"] == []
+    result = runner.invoke(app, ["preset", "load", "--diff", str(path)])
+    assert result.exit_code == 0, result.output
+    assert "No preset keys changed" in result.stdout
+
+
+def test_preset_changes_lists_a_key_one_side_lacks_as_none():
+    def preset(**keys):
+        return json.dumps({"schema version": 1, "parameters": keys})
+
+    before = preset(a="1", b="2", gone="3")
+    after = preset(b="5", a="1", added="4")
+    assert preset_changes(before, after) == [
+        {"key": "b", "old": "2", "new": "5"},
+        {"key": "added", "old": None, "new": "4"},
+        {"key": "gone", "old": "3", "new": None},
+    ]
 
 
 def test_load_overlays_a_partial_legacy_file(driver, camera, tmp_path):

@@ -1,15 +1,15 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
 from realsense_cli.advanced_mode import YesOption, device_label, require_advanced_mode
 from realsense_cli.console import console
 from realsense_cli.errors import InvalidValue
-from realsense_cli.preset import read_preset
-from realsense_cli.printer import emit
+from realsense_cli.preset import preset_changes, read_preset
+from realsense_cli.printer import emit, list_preset_changes
 from realsense_cli.utils import new_path
 
 preset_app = typer.Typer(help="Save and load preset files", no_args_is_help=True)
@@ -78,16 +78,28 @@ def preset_load(
             "it can't read as 0",
         ),
     ] = False,
+    diff: Annotated[
+        bool,
+        typer.Option(
+            "--diff",
+            help="Also list the preset keys the load changed, with their old and new values",
+        ),
+    ] = False,
     yes: YesOption = False,
 ):
     preset = read_preset(file, validate=not no_validate)
     driver, enabled = require_advanced_mode(ctx, yes)
+    before = driver.serialize_preset() if diff else None
     driver.load_preset(preset)
-    payload = {"loaded": str(file.absolute()), "advanced_mode_enabled": enabled}
-    emit(
-        ctx,
-        payload,
-        lambda: console.print(
+    payload: dict[str, Any] = {"loaded": str(file.absolute()), "advanced_mode_enabled": enabled}
+    if before is not None:
+        payload["changed"] = preset_changes(before, driver.serialize_preset())
+
+    def table() -> None:
+        console.print(
             f"Loaded preset {file} onto {device_label(driver)}", soft_wrap=True, markup=False
-        ),
-    )
+        )
+        if "changed" in payload:
+            list_preset_changes(payload["changed"])
+
+    emit(ctx, payload, table)
