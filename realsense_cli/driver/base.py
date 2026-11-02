@@ -1,7 +1,14 @@
 from pathlib import Path
 from typing import Protocol
 
-from realsense_cli.types import Calibration, DeviceInfo, FrameSet, Option, Profile
+from realsense_cli.types import (
+    AdvancedControl,
+    Calibration,
+    DeviceInfo,
+    FrameSet,
+    Option,
+    Profile,
+)
 
 
 class DriverProtocol(Protocol):
@@ -51,3 +58,7 @@ class DriverProtocol(Protocol):
     def serialize_preset(self) -> str: ...
 
     def load_preset(self, preset: str) -> None: ...
+
+    def advanced_groups(self) -> dict[str, list[str]]: ...
+
+    def advanced_controls(self) -> list[AdvancedControl]: ...

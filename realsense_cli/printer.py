@@ -12,6 +12,7 @@ from rich.table import Table
 from realsense_cli.console import console
 from realsense_cli.session import json_output
 from realsense_cli.types import (
+    AdvancedControl,
     Calibration,
     DeviceInfo,
     Option,
@@ -208,6 +209,22 @@ def list_options(
             opt.description,
         )
 
+    console.print(table)
+
+
+def list_advanced_controls(controls: list[AdvancedControl]) -> None:
+    table = Table(title="Advanced controls", box=box.SIMPLE)
+    table.add_column("Name")
+    table.add_column("Type")
+    table.add_column("Min")
+    table.add_column("Max")
+    for control in controls:
+        table.add_row(
+            control.name,
+            control.vtype.__name__,
+            "-" if control.min_value is None else str(control.min_value),
+            "-" if control.max_value is None else str(control.max_value),
+        )
     console.print(table)
 
 

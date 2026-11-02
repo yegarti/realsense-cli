@@ -4,7 +4,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from itertools import permutations
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import pyrealsense2 as rs
 from loguru import logger
@@ -20,6 +20,7 @@ from realsense_cli.errors import (
     UnknownSensor,
 )
 from realsense_cli.types import (
+    AdvancedControl,
     Calibration,
     DeviceInfo,
     Extrinsics,
@@ -82,8 +83,55 @@ def _image(rs_frame: rs.video_frame) -> Image:
     return Image(width, height, rs_frame.get_profile().format().name, data)
 
 
+# The advanced-mode group structs, by the group names `rs.rs400_advanced_mode.keys()` lists
+ADVANCED_GROUPS: dict[str, type["rs._AdvancedModeGroup"]] = {
+    "depth_control": rs.STDepthControlGroup,
+    "rsm": rs.STRsm,
+    "rau_support_vector_control": rs.STRauSupportVectorControl,
+    "color_control": rs.STColorControl,
+    "rau_thresholds_control": rs.STRauColorThresholdsControl,
+    "slo_color_thresholds_control": rs.STSloColorThresholdsControl,
+    "slo_penalty_control": rs.STSloPenaltyControl,
+    "hdad": rs.STHdad,
+    "color_correction": rs.STColorCorrection,
+    "depth_table": rs.STDepthTableControl,
+    "ae_control": rs.STAEControl,
+    "census": rs.STCensusRadius,
+    "amp_factor": rs.STAFactor,
+}
+
+# A group's current, minimum and maximum struct; None for a range the firmware doesn't report
+if TYPE_CHECKING:
+    # `_AdvancedModeGroup` is the stub's name for any group struct; pyrealsense2 has none
+    _GroupRead = tuple[
+        rs._AdvancedModeGroup, rs._AdvancedModeGroup | None, rs._AdvancedModeGroup | None
+    ]
+
+# `get_<group>(mode)`: which struct the firmware returns
+_CURRENT, _MIN, _MAX = 0, 1, 2
+
+
+def advanced_fields(group: type["rs._AdvancedModeGroup"]) -> list[str]:
+    """
+    The fields of GROUP, an advanced-mode group struct, in the SDK's order. Read from the
+    class: the struct's `keys()` is 2.59+ only
+    """
+    return [name for name in vars(group) if not name.startswith("_") and name != "keys"]
+
+
+def _field_value(
+    struct: "rs._AdvancedModeGroup", field: str, vtype: type[int] | type[float]
+) -> float:
+    """FIELD of STRUCT; a float field as the float32 the firmware holds"""
+    value = getattr(struct, field)
+    return value if vtype is int else _float32(value)
+
+
 class AdvancedMode(Protocol):
-    """The part of `rs.rs400_advanced_mode` the driver calls"""
+    """
+    The part of `rs.rs400_advanced_mode` the driver calls. It also calls `get_<group>(mode)`
+    by name, and `get_all_controls()` where the SDK has it (2.59+)
+    """
 
     def is_enabled(self) -> bool: ...
 
@@ -664,6 +712,65 @@ class Realsense:
             advanced_mode.load_json(preset)
         except RuntimeError as e:
             raise InvalidValue(f"The device refused the preset: {e}") from None
+
+    def advanced_groups(self) -> dict[str, list[str]]:
+        """Every advanced-control group and its fields. Reads no device"""
+        return {name: advanced_fields(group) for name, group in ADVANCED_GROUPS.items()}
+
+    def advanced_controls(self) -> list[AdvancedControl]:
+        """
+        Every advanced control on the active device, with its current value and range, read
+        in one bulk operation where the SDK has it. Needs advanced mode on
+        """
+        advanced_mode = self._require_advanced_mode()
+        controls = []
+        for group, (current, minimum, maximum) in self._read_advanced(advanced_mode).items():
+            for field in advanced_fields(ADVANCED_GROUPS[group]):
+                vtype = int if isinstance(getattr(current, field), int) else float
+                value = _field_value(current, field, vtype)
+                min_value, max_value = (
+                    None if struct is None else _field_value(struct, field, vtype)
+                    for struct in (minimum, maximum)
+                )
+                controls.append(
+                    AdvancedControl(
+                        f"{group}.{field}", group, vtype, value, min_value, max_value
+                    )
+                )
+        return controls
+
+    @staticmethod
+    def _read_advanced(advanced_mode: AdvancedMode) -> dict[str, "_GroupRead"]:
+        """
+        Each group's current, minimum and maximum struct; None for a minimum and maximum the
+        firmware doesn't report (`hdad`, and `ae_control` on some firmware)
+        """
+        read_all = getattr(advanced_mode, "get_all_controls", None)
+        if read_all is None:
+            # pyrealsense2 < 2.59: one read per group and mode, each powering the sensor up
+            structs = {}
+            for group in ADVANCED_GROUPS:
+                get = getattr(advanced_mode, f"get_{group}")
+                current = get(_CURRENT)
+                try:
+                    structs[group] = (current, get(_MIN), get(_MAX))
+                except RuntimeError as e:
+                    logger.debug("advanced-control group '{}' has no range: {}", group, e)
+                    structs[group] = (current, None, None)
+            return structs
+        # one bulk read. It stands the current values in for a range the firmware doesn't
+        # report, so a group whose minimum and maximum both match its current values has none
+        controls = read_all()
+        structs = {}
+        for group, group_struct in ADVANCED_GROUPS.items():
+            current, minimum, maximum = getattr(controls, group)
+            fields = advanced_fields(group_struct)
+            no_range = all(
+                getattr(minimum, f) == getattr(maximum, f) == getattr(current, f)
+                for f in fields
+            )
+            structs[group] = (current, None, None) if no_range else (current, minimum, maximum)
+        return structs
 
     def _advanced_mode(self) -> AdvancedMode | None:
         if self._injected_devices is not None:
