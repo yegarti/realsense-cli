@@ -262,6 +262,23 @@ def list_restored(restored: list[dict[str, Any]], failed: list[dict[str, Any]]) 
         console.print(table)
 
 
+def list_preset_changes(changed: list[dict[str, Any]]) -> None:
+    if not changed:
+        console.print("No preset keys changed")
+        return
+    table = Table(title="Changed preset keys", box=box.SIMPLE)
+    table.add_column("Key")
+    table.add_column("Old")
+    table.add_column("New")
+    for row in changed:
+        table.add_row(row["key"], _or_dash(row["old"]), _or_dash(row["new"]))
+    console.print(table)
+
+
+def _or_dash(value: str | None) -> str:
+    return "-" if value is None else value
+
+
 def list_frame_counts(counts: dict[str, int]) -> None:
     table = Table(title="Frames received", box=box.SIMPLE)
     table.add_column("Stream")

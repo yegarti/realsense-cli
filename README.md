@@ -502,10 +502,20 @@ rs preset save tuning.json --force    # overwrite an existing file
 rs preset save tuning.json --yes      # turn advanced mode on without asking, if it's off
 rs preset load tuning.json            # load a preset file onto the device
 rs preset load tuning.json --no-validate   # hand the file to the SDK without checking its values
+rs preset load tuning.json --diff     # ...and list the preset keys it changed
 ```
 ```
 Saved 74 keys to tuning.json
 Loaded preset tuning.json onto Intel RealSense D435 (012345678)
+```
+```
+$ rs preset load tuning.json --diff
+Loaded preset tuning.json onto Intel RealSense D435 (012345678)
+         Changed preset keys
+  Key                      Old   New
+ ────────────────────────────────────
+  controls-laserpower      150   60
+  param-rsmdiffthreshold   4     3.5
 ```
 
 A **preset file** holds the device's depth tuning (its advanced controls) and depth and color
@@ -524,6 +534,10 @@ every bad key and exits with code `7` before touching the device; `--no-validate
 check. The SDK refuses a key the device doesn't have, or a file from another product line (a D415
 preset loads on a D435, a D400 one not on a D500), also with exit code `7` and nothing written. A
 missing file is a usage error (exit code `2`).
+
+`--diff` saves the device's preset before and after the load and lists each preset key whose
+value changed, as the preset file writes it. A key the file sets to its current value isn't
+listed, and a load that changes nothing prints `No preset keys changed`.
 
 A load also sets `visual_preset` to `custom`. To undo one, `rs config restore depth` writes
 `visual_preset` back to its default, which reapplies the built-in tuning; there is no
@@ -625,7 +639,7 @@ parsers.
 | `rs bag record` | `{"path", "duration", "size", "streams": [{"sensor", "stream", "width", "height", "fps", "format", "index", "frames"}]}`: `path` absolute, `duration` in seconds from the first frame to the stop, `size` in bytes, `streams` the profiles started, each with the frames in the file |
 | `rs bag info --calibration` / `--controls` | also `"intrinsics"` and `"extrinsics"` as in `rs info PROFILES...`, for the recorded profiles; and `"controls": [{"sensor", "values": {"<control>": <value>}}]`, as in `rs config get`, with the values at the recording start |
 | `rs preset save [FILE]` | `{"saved", "keys", "advanced_mode_enabled"}`: `saved` the file's absolute path, `keys` the number of preset keys written, `advanced_mode_enabled` `true` when this run turned advanced mode on |
-| `rs preset load FILE` | `{"loaded", "advanced_mode_enabled"}`: `loaded` the file's absolute path, `advanced_mode_enabled` `true` when this run turned advanced mode on |
+| `rs preset load FILE` | `{"loaded", "advanced_mode_enabled"}`: `loaded` the file's absolute path, `advanced_mode_enabled` `true` when this run turned advanced mode on. With `--diff`, also `"changed": [{"key", "old", "new"}]`, the preset keys the load changed with their values as strings, as the preset file writes them (`[]` when none changed) |
 | `rs advanced list [GROUP]...` | `{"controls": [{"name", "group", "vtype": "int" \| "float", "min_value", "max_value"}], "advanced_mode_enabled"}`: `name` is `group.field`; `min_value` and `max_value` are `null` for a group the firmware reports no range for. `advanced_mode_enabled` as in `rs preset save` |
 | `rs advanced get` | `{"values": {"<group.field>": <value>}, "advanced_mode_enabled"}` |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |

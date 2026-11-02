@@ -80,3 +80,17 @@ def read_preset(path: Path, validate: bool = True) -> str:
                 f"or one of {', '.join(VALUE_NAMES)}; --no-validate loads them anyway"
             )
     return text
+
+
+def preset_changes(before: str, after: str) -> list[dict[str, str | None]]:
+    """
+    The preset keys whose value differs between BEFORE and AFTER, two preset files the SDK
+    wrote, in AFTER's order: `{"key", "old", "new"}`, with None for a key one of them lacks
+    """
+    old, new = json.loads(before)["parameters"], json.loads(after)["parameters"]
+    keys = list(new) + [key for key in old if key not in new]
+    return [
+        {"key": key, "old": old.get(key), "new": new.get(key)}
+        for key in keys
+        if old.get(key) != new.get(key)
+    ]
