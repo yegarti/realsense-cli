@@ -257,20 +257,59 @@ D435_DEFAULT_TUNING: dict[str, dict[str, float]] = {
     "amp_factor": {"a_factor": 0.0},
 }
 
-# The advanced-control fields that are int32 on the firmware; every other int field is uint32
-_SIGNED_FIELDS = {
-    ("depth_table", "depthClampMin"),
-    ("depth_table", "depthClampMax"),
-    ("depth_table", "disparityShift"),
+# The advanced-control ranges a D455 (FW 5.17.3.10) reports, as (min, max): no D435 was at hand.
+# It reports none for `hdad` and `ae_control`: reading their minimum or maximum fails
+D455_RANGES: dict[str, dict[str, tuple[float, float]]] = {
+    "depth_control": {
+        "plusIncrement": (0, 255),
+        "minusDecrement": (0, 255),
+        "deepSeaMedianThreshold": (0, 1023),
+        "scoreThreshA": (0, 1023),
+        "scoreThreshB": (0, 4095),
+        "textureDifferenceThreshold": (0, 4095),
+        "textureCountThreshold": (0, 1023),
+        "deepSeaSecondPeakThreshold": (0, 1023),
+        "deepSeaNeighborThreshold": (0, 1023),
+        "lrAgreeThreshold": (0, 2047),
+    },
+    "rsm": {
+        "rsmBypass": (0, 1),
+        "diffThresh": (0.0, 7.96875),
+        "sloRauDiffThresh": (0.0, 3.96875),
+        "removeThresh": (0, 168),
+    },
+    "rau_support_vector_control": {
+        "minWest": (0, 7),
+        "minEast": (0, 7),
+        "minWEsum": (0, 15),
+        "minNorth": (0, 3),
+        "minSouth": (0, 3),
+        "minNSsum": (0, 7),
+        "uShrink": (0, 4),
+        "vShrink": (0, 4),
+    },
+    "color_control": dict.fromkeys(D435_DEFAULT_TUNING["color_control"], (0, 1)),
+    "rau_thresholds_control": dict.fromkeys(
+        D435_DEFAULT_TUNING["rau_thresholds_control"], (0, 1022)
+    ),
+    "slo_color_thresholds_control": dict.fromkeys(
+        D435_DEFAULT_TUNING["slo_color_thresholds_control"], (0, 1022)
+    ),
+    "slo_penalty_control": dict.fromkeys(D435_DEFAULT_TUNING["slo_penalty_control"], (0, 511)),
+    # 2 - 1/1024: the largest float32 the firmware's fixed point holds below 2
+    "color_correction": dict.fromkeys(
+        D435_DEFAULT_TUNING["color_correction"], (-2.0, 1.9990234375)
+    ),
+    "depth_table": {
+        "depthUnits": (1, 10000),
+        "depthClampMin": (0, 65536),
+        "depthClampMax": (0, 65536),
+        "disparityMode": (0, 1),
+        "disparityShift": (0, 512),
+    },
+    "census": {"uDiameter": (1, 9), "vDiameter": (1, 9)},
+    "amp_factor": {"a_factor": (0.0, 0.2)},
 }
-
-# Invented ranges, for want of firmware to ask: 0 to the largest value the field's type holds
-_INT32_MAX = 2**31 - 1
-_UINT32_MAX = 2**32 - 1
-_FLOAT32_MAX = 3.4028234663852886e38
-
-# The groups whose range the firmware doesn't report: reading their minimum or maximum fails
-_NO_RANGE = {"hdad"}
 
 # The preset keys librealsense writes for advanced controls, -> (group, field, scale): the file
 # holds the field's value divided by the scale (`initialize_field_parsers()` in json_loader.hpp,
@@ -412,7 +451,7 @@ class FakeAdvancedMode:
     """
     Advanced mode for a SoftwareCamera: the part of `rs.rs400_advanced_mode` the driver calls,
     which pyrealsense2 can't give a software device. It holds the D435 Default tuning in real
-    pyrealsense2 group structs, with invented ranges (none for `hdad`, as on a real D400).
+    pyrealsense2 group structs, with a D455's ranges (none for `hdad` and `ae_control`).
 
     As on a D400, the depth sensor has `visual_preset` and a writable `depth_units` only while
     advanced mode is on, and `camera_info.advanced_mode` says whether it is. Turning it on
@@ -427,9 +466,7 @@ class FakeAdvancedMode:
             for field_name, value in fields.items():
                 setattr(self.groups[name], field_name, value)
         self._ranges = {
-            name: _placeholder_range(name, struct)
-            for name, struct in ADVANCED_GROUPS.items()
-            if name not in _NO_RANGE
+            name: _range(ADVANCED_GROUPS[name], fields) for name, fields in D455_RANGES.items()
         }
         depth = camera.sensor(Sensor.STEREO_MODULE)
         self._depth_units = depth.get_option_range(rs.option.depth_units)
@@ -486,7 +523,7 @@ class FakeAdvancedMode:
             """
             controls = SimpleNamespace()
             for group in ADVANCED_GROUPS:
-                modes = (0, 0, 0) if group in _NO_RANGE else (0, 1, 2)
+                modes = (0, 1, 2) if group in self._ranges else (0, 0, 0)
                 setattr(controls, group, [self.get(group, mode) for mode in modes])
             return controls
 
@@ -624,20 +661,14 @@ def _copy(struct: "rs._AdvancedModeGroup") -> "rs._AdvancedModeGroup":
     return copy
 
 
-def _placeholder_range(
-    group: str, struct: type["rs._AdvancedModeGroup"]
+def _range(
+    struct: type["rs._AdvancedModeGroup"], fields: dict[str, tuple[float, float]]
 ) -> tuple["rs._AdvancedModeGroup", "rs._AdvancedModeGroup"]:
-    """GROUP's minimum and maximum: invented, 0 to the largest value each field's type holds"""
+    """A group's minimum and maximum structs, from FIELDS' (min, max)"""
     minimum, maximum = struct(), struct()
-    for field_name in advanced_fields(struct):
-        if isinstance(getattr(maximum, field_name), float):
-            largest = _FLOAT32_MAX
-        elif (group, field_name) in _SIGNED_FIELDS:
-            largest = _INT32_MAX
-        else:
-            largest = _UINT32_MAX
-        setattr(minimum, field_name, type(largest)(0))
-        setattr(maximum, field_name, largest)
+    for field_name, (low, high) in fields.items():
+        setattr(minimum, field_name, low)
+        setattr(maximum, field_name, high)
     return minimum, maximum
 
 

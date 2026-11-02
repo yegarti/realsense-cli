@@ -22,9 +22,6 @@ runner = CliRunner()
 GROUPS = list(ADVANCED_GROUPS)
 FIELDS = 63
 
-UINT32_MAX = 2**32 - 1
-FLOAT32_MAX = 3.4028235e38
-
 
 def _advanced_mode_off():
     return d435(advanced_mode=False)
@@ -50,16 +47,23 @@ def test_list_shows_every_control(driver):
         "group": "rsm",
         "vtype": "float",
         "min_value": 0.0,
-        "max_value": FLOAT32_MAX,
+        "max_value": 7.96875,
     }
     assert by_name["depth_control.plusIncrement"]["vtype"] == "int"
-    assert by_name["depth_control.plusIncrement"]["max_value"] == UINT32_MAX
-    assert by_name["depth_table.depthClampMax"]["max_value"] == 2**31 - 1  # int32
+    assert by_name["depth_control.plusIncrement"]["max_value"] == 255
+    assert by_name["census.uDiameter"]["min_value"] == 1
+    # float32 ranges read back as the shortest decimal that is the same float32
+    assert by_name["color_correction.colorCorrection1"]["max_value"] == 1.9990234
 
 
-def test_list_shows_no_range_for_hdad(driver):
-    controls = _controls("hdad")
-    assert list(controls) == ["hdad.lambdaCensus", "hdad.lambdaAD", "hdad.ignoreSAD"]
+def test_list_shows_no_range_for_hdad_and_ae_control(driver):
+    controls = _controls("hdad", "ae_control")
+    assert list(controls) == [
+        "hdad.lambdaCensus",
+        "hdad.lambdaAD",
+        "hdad.ignoreSAD",
+        "ae_control.meanIntensitySetPoint",
+    ]
     for control in controls.values():
         assert control["min_value"] is None
         assert control["max_value"] is None
@@ -82,7 +86,8 @@ def test_list_prints_a_table(driver):
     assert result.exit_code == 0, result.output
     lines = list(map(str.split, result.stdout.splitlines()))
     assert ["Name", "Type", "Min", "Max"] in lines
-    assert ["rsm.removeThresh", "int", "0", str(UINT32_MAX)] in lines
+    assert ["rsm.removeThresh", "int", "0", "168"] in lines
+    assert ["rsm.diffThresh", "float", "0.0", "7.96875"] in lines
     assert ["hdad.ignoreSAD", "int", "-", "-"] in lines
 
 
@@ -245,5 +250,6 @@ def test_per_group_reads_match_the_bulk_read(camera):
         [camera.device], {D435.serial: _PerGroupOnly(camera.advanced_mode)}
     ).advanced_controls()
     assert per_group == bulk
-    hdad = [c for c in per_group if c.group == "hdad"]
-    assert all(c.min_value is None and c.max_value is None for c in hdad)
+    no_range = [c for c in per_group if c.group in ("hdad", "ae_control")]
+    assert len(no_range) == 4
+    assert all(c.min_value is None and c.max_value is None for c in no_range)
