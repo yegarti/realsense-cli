@@ -199,6 +199,36 @@ def test_advanced_list_reads_real_ranges(camera_driver):
         rs.rs400_advanced_mode(device).get_hdad(1)
 
 
+def test_advanced_set_reads_back_what_the_firmware_holds(camera_driver):
+    """
+    The firmware may round a float advanced control: `set` reports the value read back, which
+    `get` then reads too, and moves the visual preset to custom. Puts the old value back.
+    Needs advanced mode on already, as `test_advanced_list_reads_real_ranges` does
+    """
+    serial = camera_driver.active_device
+    if not camera_driver.advanced_mode():
+        pytest.skip("the camera has no advanced mode, or it's off")
+    name = "rsm.diffThresh"
+
+    def advanced(*args: str) -> dict:
+        result = runner.invoke(app, ["--json", "-s", serial, "advanced", *args])
+        assert result.exit_code == 0, result.output
+        return json.loads(result.stdout)
+
+    before = advanced("get", name)["values"][name]
+    try:
+        # the firmware keeps diffThresh in 1/32 steps (a D455 reads 1/3 back as 0.34375)
+        read_back = advanced("set", f"{name}={1 / 3}")["values"][name]
+        assert read_back == advanced("get", name)["values"][name]
+        assert read_back != pytest.approx(1 / 3, abs=1e-6)
+        assert read_back * 32 == round(read_back * 32)
+        assert read_back == pytest.approx(1 / 3, abs=1 / 32)
+        preset = camera_driver.get_control_values(Sensor.STEREO_MODULE, ["visual_preset"])
+        assert preset == {"visual_preset": 0}
+    finally:
+        advanced("set", "--no-validate", f"{name}={before}")
+
+
 def test_bag_record_defaults(camera_driver, tmp_path):
     """
     The recorder wraps a real device, whose UVC sensors it records through the same hooks as

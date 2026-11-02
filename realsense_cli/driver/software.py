@@ -513,6 +513,20 @@ class FakeAdvancedMode:
             raise RuntimeError(f"failed to read the {group} range")
         return _copy(self._ranges[group][mode - 1])
 
+    def set(self, group: str, values: "rs._AdvancedModeGroup") -> None:
+        """
+        Write VALUES, a whole group struct, as the SDK's `set_<group>(struct)` does: with no
+        range check, then `visual_preset` to custom. The depth table's units go to
+        `depth_units`, where librealsense keeps them
+        """
+        if not self._enabled:
+            raise RuntimeError("advanced mode is off")
+        self.groups[group] = _copy(values)
+        depth = self._camera.sensor(Sensor.STEREO_MODULE)
+        if group == "depth_table":
+            _set_float_option(depth, rs.option.depth_units, values.depthUnits / 1e6)
+        depth.set_option(rs.option.visual_preset, _VISUAL_PRESET_CUSTOM)
+
     if hasattr(rs.rs400_advanced_mode, "get_all_controls"):
         # only where the installed SDK has it (2.59+), so the driver's other path runs too
 
@@ -645,12 +659,18 @@ class FakeAdvancedMode:
         return controls
 
 
-# `rs400_advanced_mode`'s `get_<group>(mode)` methods, which the driver calls by name
+# `rs400_advanced_mode`'s `get_<group>(mode)` and `set_<group>(struct)` methods, which the
+# driver calls by name
 for _group in ADVANCED_GROUPS:
     setattr(
         FakeAdvancedMode,
         f"get_{_group}",
         lambda self, mode=0, group=_group: self.get(group, mode),
+    )
+    setattr(
+        FakeAdvancedMode,
+        f"set_{_group}",
+        lambda self, values, group=_group: self.set(group, values),
     )
 
 

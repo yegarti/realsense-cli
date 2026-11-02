@@ -130,7 +130,7 @@ def _field_value(
 class AdvancedMode(Protocol):
     """
     The part of `rs.rs400_advanced_mode` the driver calls. It also calls `get_<group>(mode)`
-    by name, and `get_all_controls()` where the SDK has it (2.59+)
+    and `set_<group>(struct)` by name, and `get_all_controls()` where the SDK has it (2.59+)
     """
 
     def is_enabled(self) -> bool: ...
@@ -738,6 +738,40 @@ class Realsense:
                     )
                 )
         return controls
+
+    def set_advanced_controls(self, values: dict[str, float]) -> None:
+        """
+        Write VALUES, keyed by `group.field` as the SDK spells it, onto the active device: one
+        read-modify-write per group. Checks no range. A value the SDK's struct can't hold (a
+        fraction for an int field, a negative for an unsigned one) raises `InvalidValue`
+        before anything is written. Needs advanced mode on
+        """
+        advanced_mode = self._require_advanced_mode()
+        by_group: dict[str, dict[str, float]] = {}
+        for name, value in values.items():
+            group, _, field = name.partition(".")
+            by_group.setdefault(group, {})[field] = value
+        structs = {}
+        for group, fields in by_group.items():
+            struct = getattr(advanced_mode, f"get_{group}")(_CURRENT)
+            for field, value in fields.items():
+                if isinstance(getattr(struct, field), int) and float(value).is_integer():
+                    value = int(value)
+                try:
+                    setattr(struct, field, value)
+                except TypeError:
+                    raise InvalidValue(
+                        f"Advanced control '{group}.{field}' can't hold {value}: "
+                        f"the SDK's {type(getattr(struct, field)).__name__} field rejects it"
+                    ) from None
+            structs[group] = struct
+        for group, struct in structs.items():
+            try:
+                getattr(advanced_mode, f"set_{group}")(struct)
+            except RuntimeError as e:
+                raise InvalidValue(
+                    f"The device refused advanced-control group '{group}': {e}"
+                ) from None
 
     @staticmethod
     def _read_advanced(advanced_mode: AdvancedMode) -> dict[str, "_GroupRead"]:
