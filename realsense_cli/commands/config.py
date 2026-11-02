@@ -3,10 +3,9 @@ from typing import Annotated
 
 import typer
 
-from realsense_cli.driver.base import DriverProtocol
-from realsense_cli.errors import ControlUnavailable, InvalidValue
+from realsense_cli.errors import InvalidValue
 from realsense_cli.printer import emit, list_options, list_options_values, list_restored
-from realsense_cli.restore import restore_controls
+from realsense_cli.restore import read_available, restore_controls
 from realsense_cli.session import require_device
 from realsense_cli.types import resolve_sensor_name
 
@@ -126,21 +125,6 @@ def config_restore(
     )
     if failed:
         raise typer.Exit(InvalidValue.exit_code)
-
-
-def read_available(
-    driver: DriverProtocol, sensor: str, controls: list[str]
-) -> tuple[dict[str, float], list[str]]:
-    """
-    Values of the CONTROLS the sensor can read right now, and the names of those it can't
-    """
-    values, unavailable = {}, []
-    for control in controls:
-        try:
-            values |= driver.get_control_values(sensor, [control])
-        except ControlUnavailable:
-            unavailable.append(control)
-    return values, unavailable
 
 
 def _emit_values(ctx: typer.Context, sensor: str, values: dict[str, float]) -> None:

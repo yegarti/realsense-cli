@@ -229,6 +229,34 @@ def test_advanced_set_reads_back_what_the_firmware_holds(camera_driver):
         advanced("set", "--no-validate", f"{name}={before}")
 
 
+def test_advanced_restore_changes_laser_and_auto_exposure(camera_driver):
+    """
+    Writing the default visual preset sets laser on, laser power 150 and depth auto exposure
+    on (`set_all()` in librealsense v2.59.1), and no other ordinary depth control. Leaves the
+    camera at its Default tuning. Needs advanced mode on already, as
+    `test_advanced_list_reads_real_ranges` does
+    """
+    serial = camera_driver.active_device
+    if not camera_driver.advanced_mode():
+        pytest.skip("the camera has no advanced mode, or it's off")
+    camera_driver.set_control_values(
+        Sensor.STEREO_MODULE,
+        {"laser_power": 90, "emitter_enabled": 0, "enable_auto_exposure": 0},
+    )
+
+    result = runner.invoke(app, ["--json", "-s", serial, "advanced", "restore"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["failed"] == []
+    changed = {row["control"]: (row["old"], row["new"]) for row in payload["restored"]}
+    assert changed.pop("visual_preset")[1] == 1.0
+    assert changed == {
+        "emitter_enabled": (0.0, 1.0),
+        "laser_power": (90.0, 150.0),
+        "enable_auto_exposure": (0.0, 1.0),
+    }
+
+
 def test_bag_record_defaults(camera_driver, tmp_path):
     """
     The recorder wraps a real device, whose UVC sensors it records through the same hooks as

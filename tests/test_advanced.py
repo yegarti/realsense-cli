@@ -1,3 +1,4 @@
+import json
 from dataclasses import replace
 
 import pytest
@@ -13,6 +14,7 @@ from realsense_cli.driver.software import (
     d435,
     software_driver,
 )
+from realsense_cli.errors import InvalidValue
 from realsense_cli.types import Sensor
 from tests.test_json import invoke_json, json_error
 
@@ -176,7 +178,7 @@ def test_unknown_name_fails_before_turning_advanced_mode_on(driver):
 
 
 @advanced_mode_off
-@pytest.mark.parametrize("command", [["list"], ["get", "--all"]])
+@pytest.mark.parametrize("command", [["list"], ["get", "--all"], ["restore"]])
 def test_advanced_mode_off_without_tty_needs_yes(driver, command):
     result = runner.invoke(app, ["advanced", *command])
     assert result.exit_code == 8, result.output
@@ -192,7 +194,7 @@ def test_advanced_mode_off_under_json_needs_yes_even_on_tty(driver, tty):
 
 
 @advanced_mode_off
-@pytest.mark.parametrize("command", [["list", "rsm"], ["get", "rsm"]])
+@pytest.mark.parametrize("command", [["list", "rsm"], ["get", "rsm"], ["restore"]])
 def test_yes_turns_advanced_mode_on(driver, command):
     payload = invoke_json("advanced", *command, "--yes")
     assert payload["advanced_mode_enabled"] is True
@@ -434,3 +436,95 @@ def test_set_float_beyond_float32_is_out_of_range(driver):
         "Advanced control 'rsm.diffThresh' takes a float from 0 to 7.96875, not 1e+40; "
         "--no-validate skips the range check"
     )
+
+
+STEREO = Sensor.STEREO_MODULE
+
+
+def _preset_row(old: float, new: float = 1.0) -> dict:
+    return {"sensor": STEREO, "control": "visual_preset", "old": old, "new": new}
+
+
+def _default_rsm() -> dict:
+    return {f"rsm.{field}": value for field, value in D435_DEFAULT_TUNING["rsm"].items()}
+
+
+def test_restore_brings_back_the_default_tuning(driver):
+    invoke_json("advanced", "set", "rsm.diffThresh=2", "rsm.removeThresh=100")
+    driver.set_control_values(STEREO, {"laser_power": 30, "enable_auto_exposure": 0})
+
+    assert invoke_json("advanced", "restore") == {
+        "restored": [
+            _preset_row(old=0.0),
+            {"sensor": STEREO, "control": "enable_auto_exposure", "old": 0.0, "new": 1.0},
+            {"sensor": STEREO, "control": "laser_power", "old": 30.0, "new": 150.0},
+        ],
+        "failed": [],
+        "advanced_mode_enabled": False,
+    }
+    assert invoke_json("advanced", "get", "rsm")["values"] == pytest.approx(_default_rsm())
+
+
+def test_restore_writes_the_preset_even_when_it_reads_default(driver):
+    driver.set_control_values(STEREO, {"visual_preset": 1})
+    driver.set_control_values(STEREO, {"laser_power": 30})
+    restored = invoke_json("advanced", "restore")["restored"]
+    assert restored == [
+        _preset_row(old=1.0),
+        {"sensor": STEREO, "control": "laser_power", "old": 30.0, "new": 150.0},
+    ]
+
+
+def test_restore_prints_a_table(driver):
+    driver.set_control_values(STEREO, {"laser_power": 30})
+    result = runner.invoke(app, ["advanced", "restore"])
+    assert result.exit_code == 0, result.output
+    lines = list(map(str.split, result.stdout.splitlines()))
+    assert ["Stereo", "Module", "visual_preset", "0.0", "1.0"] in lines
+    assert ["Stereo", "Module", "laser_power", "30.0", "150.0"] in lines
+
+
+def test_restore_reports_a_failed_write(driver, monkeypatch):
+    def refuse(sensor, values):
+        raise InvalidValue("Failed to set 'visual_preset'")
+
+    monkeypatch.setattr(driver, "set_control_values", refuse)
+    result = runner.invoke(app, ["--json", "advanced", "restore"])
+    assert result.exit_code == InvalidValue.exit_code, result.output
+    payload = json.loads(result.stdout)
+    assert payload["restored"] == []
+    assert payload["failed"] == [
+        {"sensor": STEREO, "control": "visual_preset", "error": "Failed to set 'visual_preset'"}
+    ]
+
+
+def test_config_restore_leaves_a_loaded_preset_and_advanced_restore_undoes_it(driver, tmp_path):
+    """
+    `visual_preset`'s default is custom, which a load already set and which writes nothing,
+    so only `rs advanced restore` brings the tuning back
+    """
+    path = tmp_path / "preset.json"
+    path.write_text(json.dumps({"param-rsmdiffthreshold": "3.5"}))
+    invoke_json("preset", "load", str(path))
+    loaded = invoke_json("advanced", "get", "rsm.diffThresh")["values"]
+    assert loaded != {"rsm.diffThresh": D435_DEFAULT_TUNING["rsm"]["diffThresh"]}
+
+    invoke_json("config", "restore", "depth")
+    assert invoke_json("advanced", "get", "rsm.diffThresh")["values"] == loaded
+
+    invoke_json("advanced", "restore")
+    assert invoke_json("advanced", "get", "rsm")["values"] == pytest.approx(_default_rsm())
+
+
+@pytest.mark.parametrize("preset", [0, 3])
+def test_writing_another_preset_keeps_the_tuning(driver, preset):
+    """The SDK applies nothing for custom; the fake knows only the Default tuning"""
+    invoke_json("advanced", "set", "rsm.diffThresh=2")
+    driver.set_control_values(STEREO, {"laser_power": 30, "visual_preset": preset})
+    assert invoke_json("advanced", "get", "rsm.diffThresh")["values"] == {"rsm.diffThresh": 2}
+    assert driver.get_control_values(STEREO, ["laser_power"]) == {"laser_power": 30}
+
+
+def test_a_control_written_after_the_preset_keeps_its_value(driver):
+    driver.set_control_values(STEREO, {"visual_preset": 1, "laser_power": 30})
+    assert driver.get_control_values(STEREO, ["laser_power"]) == {"laser_power": 30}

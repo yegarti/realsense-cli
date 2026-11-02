@@ -445,6 +445,15 @@ _SKIPPED_WHEN: dict[str, tuple[str, float]] = {
 }
 
 _VISUAL_PRESET_CUSTOM = 0  # rs.rs400_visual_preset.custom
+_VISUAL_PRESET_DEFAULT = 1  # rs.rs400_visual_preset.default
+
+# The ordinary depth controls librealsense's `set_all()` writes with the Default preset, in its
+# order: laser on, laser power 150, depth auto exposure on (`default_430()`, v2.59.1)
+_DEFAULT_PRESET_CONTROLS: dict[str, float] = {
+    "emitter_enabled": 1,
+    "laser_power": 150,
+    "enable_auto_exposure": 1,
+}
 
 
 class FakeAdvancedMode:
@@ -461,10 +470,7 @@ class FakeAdvancedMode:
     def __init__(self, camera: SoftwareCamera, enabled: bool):
         self._camera = camera
         self._enabled = enabled
-        self.groups = {name: struct() for name, struct in ADVANCED_GROUPS.items()}
-        for name, fields in D435_DEFAULT_TUNING.items():
-            for field_name, value in fields.items():
-                setattr(self.groups[name], field_name, value)
+        self.groups = _default_tuning()
         self._ranges = {
             name: _range(ADVANCED_GROUPS[name], fields) for name, fields in D455_RANGES.items()
         }
@@ -526,6 +532,28 @@ class FakeAdvancedMode:
         if group == "depth_table":
             _set_float_option(depth, rs.option.depth_units, values.depthUnits / 1e6)
         depth.set_option(rs.option.visual_preset, _VISUAL_PRESET_CUSTOM)
+
+    def apply_visual_preset(self, preset: float) -> None:
+        """
+        Apply PRESET, just written to `visual_preset`, as librealsense does: `default` reloads
+        the Default tuning into every group, then sets the controls `set_all()` writes with
+        it (laser on where the sensor has the control, laser power 150, depth auto exposure
+        on). `custom` writes nothing, as in the SDK. The fake knows no other preset's tuning,
+        so those keep the current values
+        """
+        if not self._enabled or preset != _VISUAL_PRESET_DEFAULT:
+            return
+        self.groups = _default_tuning()
+        depth = self._camera.sensor(Sensor.STEREO_MODULE)
+        depth_units = self.groups["depth_table"].depthUnits
+        # the software sensor may only hold a float32 near it, so rewriting would move it
+        if round(depth.get_option(rs.option.depth_units) * 1e6) != depth_units:
+            _set_float_option(depth, rs.option.depth_units, depth_units / 1e6)
+        supported = depth.get_supported_options()
+        for control, value in _DEFAULT_PRESET_CONTROLS.items():
+            option = rs.option.__members__[control]
+            if option in supported:
+                depth.set_option(option, value)
 
     if hasattr(rs.rs400_advanced_mode, "get_all_controls"):
         # only where the installed SDK has it (2.59+), so the driver's other path runs too
@@ -672,6 +700,35 @@ for _group in ADVANCED_GROUPS:
         f"set_{_group}",
         lambda self, values, group=_group: self.set(group, values),
     )
+
+
+class SoftwareRealsense(Realsense):
+    """
+    The real driver over software cameras. pyrealsense2 has no hook on a software sensor's
+    option, so a `visual_preset` write is handed to the camera's `FakeAdvancedMode` here,
+    which applies the preset as librealsense does when the option is written
+    """
+
+    def set_control_values(self, sensor: str, control_values: dict[str, float]) -> None:
+        # one at a time, so a preset applies before the controls written after it
+        for control, value in control_values.items():
+            super().set_control_values(sensor, {control: value})
+            advanced_mode = self._advanced_modes.get(self.active_device)
+            if (
+                control == "visual_preset"
+                and sensor == Sensor.STEREO_MODULE
+                and isinstance(advanced_mode, FakeAdvancedMode)
+            ):
+                advanced_mode.apply_visual_preset(value)
+
+
+def _default_tuning() -> dict[str, "rs._AdvancedModeGroup"]:
+    """Every group's struct, holding the D435 Default tuning"""
+    groups = {name: struct() for name, struct in ADVANCED_GROUPS.items()}
+    for name, fields in D435_DEFAULT_TUNING.items():
+        for field_name, value in fields.items():
+            setattr(groups[name], field_name, value)
+    return groups
 
 
 def _copy(struct: "rs._AdvancedModeGroup") -> "rs._AdvancedModeGroup":
@@ -919,7 +976,7 @@ def software_driver(*cameras: SoftwareCamera) -> Realsense:
         for camera in cameras
         if camera.advanced_mode is not None
     }
-    return Realsense([camera.device for camera in cameras], advanced_modes)
+    return SoftwareRealsense([camera.device for camera in cameras], advanced_modes)
 
 
 def d435_sensor(name: str) -> SensorSpec:

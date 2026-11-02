@@ -8,7 +8,6 @@ import typer
 from loguru import logger
 
 from realsense_cli.commands.capture import profile_payload
-from realsense_cli.commands.config import read_available
 from realsense_cli.commands.info import calibration_payload
 from realsense_cli.commands.stream import _STREAM_ALIASES_STR, count_frames
 from realsense_cli.console import err_console
@@ -16,6 +15,7 @@ from realsense_cli.driver import open_recording
 from realsense_cli.errors import InvalidValue, NoFrames
 from realsense_cli.printer import emit, recording_details, recording_summary
 from realsense_cli.recording import check_recording
+from realsense_cli.restore import read_available
 from realsense_cli.session import json_output, require_device
 from realsense_cli.types import FrameSet, Profile
 from realsense_cli.utils import find_origin_sensor, new_path
