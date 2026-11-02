@@ -51,6 +51,21 @@ class Option:
     read_only: bool = False
 
 
+@dataclass(frozen=True)
+class AdvancedControl:
+    """
+    One advanced control: NAME is `group.field` with the SDK's names (`rsm.diffThresh`).
+    MIN_VALUE and MAX_VALUE are None when the firmware reports no range for the group
+    """
+
+    name: str
+    group: str
+    vtype: type[int] | type[float]
+    value: float
+    min_value: float | None
+    max_value: float | None
+
+
 _SENSOR_ALIASES: dict[str, Sensor] = {
     "depth": Sensor.STEREO_MODULE,
     "color": Sensor.RGB_CAMERA,

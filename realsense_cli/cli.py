@@ -9,6 +9,7 @@ from rich.markup import escape
 from typer.core import TyperGroup
 from typer.exceptions import Abort, Exit, TyperException
 
+from realsense_cli.commands.advanced import advanced_app
 from realsense_cli.commands.bag import bag_app
 from realsense_cli.commands.capture import rs_capture
 from realsense_cli.commands.config import config_app
@@ -105,6 +106,8 @@ app.add_typer(stream_app, name="stream")
 app.add_typer(bag_app, name="bag")
 
 app.add_typer(preset_app, name="preset")
+
+app.add_typer(advanced_app, name="advanced")
 
 
 RESET_WAIT_TIMEOUT = 30

@@ -37,6 +37,12 @@ class UnknownControl(RsCliError):
         )
 
 
+class UnknownAdvancedControl(RsCliError):
+    """An advanced-control name that names no group, or no field in its group"""
+
+    exit_code = 5
+
+
 class InvalidProfile(RsCliError):
     exit_code = 6
 

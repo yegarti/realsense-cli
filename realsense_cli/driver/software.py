@@ -29,11 +29,17 @@ from array import array
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from itertools import count
+from types import SimpleNamespace
 from typing import NamedTuple
 
 import pyrealsense2 as rs
 
-from realsense_cli.driver.realsense import AdvancedMode, Realsense
+from realsense_cli.driver.realsense import (
+    ADVANCED_GROUPS,
+    AdvancedMode,
+    Realsense,
+    advanced_fields,
+)
 from realsense_cli.types import (
     DeviceInfo,
     Extrinsics,
@@ -182,23 +188,6 @@ class SoftwareCamera:
                     sensor.on_video_frame(video)
 
 
-# The advanced-mode group structs, by the group names `rs.rs400_advanced_mode.keys()` lists
-_GROUPS: dict[str, type["rs._AdvancedModeGroup"]] = {
-    "depth_control": rs.STDepthControlGroup,
-    "rsm": rs.STRsm,
-    "rau_support_vector_control": rs.STRauSupportVectorControl,
-    "color_control": rs.STColorControl,
-    "rau_thresholds_control": rs.STRauColorThresholdsControl,
-    "slo_color_thresholds_control": rs.STSloColorThresholdsControl,
-    "slo_penalty_control": rs.STSloPenaltyControl,
-    "hdad": rs.STHdad,
-    "color_correction": rs.STColorCorrection,
-    "depth_table": rs.STDepthTableControl,
-    "ae_control": rs.STAEControl,
-    "census": rs.STCensusRadius,
-    "amp_factor": rs.STAFactor,
-}
-
 # librealsense's D435 Default tuning in struct units (`default_430()` in presets.cpp, v2.59.1)
 D435_DEFAULT_TUNING: dict[str, dict[str, float]] = {
     "depth_control": {
@@ -266,6 +255,60 @@ D435_DEFAULT_TUNING: dict[str, dict[str, float]] = {
     "ae_control": {"meanIntensitySetPoint": 1536},
     "census": {"uDiameter": 9, "vDiameter": 9},
     "amp_factor": {"a_factor": 0.0},
+}
+
+# The advanced-control ranges a D455 (FW 5.17.3.10) reports, as (min, max): no D435 was at hand.
+# It reports none for `hdad` and `ae_control`: reading their minimum or maximum fails
+D455_RANGES: dict[str, dict[str, tuple[float, float]]] = {
+    "depth_control": {
+        "plusIncrement": (0, 255),
+        "minusDecrement": (0, 255),
+        "deepSeaMedianThreshold": (0, 1023),
+        "scoreThreshA": (0, 1023),
+        "scoreThreshB": (0, 4095),
+        "textureDifferenceThreshold": (0, 4095),
+        "textureCountThreshold": (0, 1023),
+        "deepSeaSecondPeakThreshold": (0, 1023),
+        "deepSeaNeighborThreshold": (0, 1023),
+        "lrAgreeThreshold": (0, 2047),
+    },
+    "rsm": {
+        "rsmBypass": (0, 1),
+        "diffThresh": (0.0, 7.96875),
+        "sloRauDiffThresh": (0.0, 3.96875),
+        "removeThresh": (0, 168),
+    },
+    "rau_support_vector_control": {
+        "minWest": (0, 7),
+        "minEast": (0, 7),
+        "minWEsum": (0, 15),
+        "minNorth": (0, 3),
+        "minSouth": (0, 3),
+        "minNSsum": (0, 7),
+        "uShrink": (0, 4),
+        "vShrink": (0, 4),
+    },
+    "color_control": dict.fromkeys(D435_DEFAULT_TUNING["color_control"], (0, 1)),
+    "rau_thresholds_control": dict.fromkeys(
+        D435_DEFAULT_TUNING["rau_thresholds_control"], (0, 1022)
+    ),
+    "slo_color_thresholds_control": dict.fromkeys(
+        D435_DEFAULT_TUNING["slo_color_thresholds_control"], (0, 1022)
+    ),
+    "slo_penalty_control": dict.fromkeys(D435_DEFAULT_TUNING["slo_penalty_control"], (0, 511)),
+    # 2 - 1/1024: the largest float32 the firmware's fixed point holds below 2
+    "color_correction": dict.fromkeys(
+        D435_DEFAULT_TUNING["color_correction"], (-2.0, 1.9990234375)
+    ),
+    "depth_table": {
+        "depthUnits": (1, 10000),
+        "depthClampMin": (0, 65536),
+        "depthClampMax": (0, 65536),
+        "disparityMode": (0, 1),
+        "disparityShift": (0, 512),
+    },
+    "census": {"uDiameter": (1, 9), "vDiameter": (1, 9)},
+    "amp_factor": {"a_factor": (0.0, 0.2)},
 }
 
 # The preset keys librealsense writes for advanced controls, -> (group, field, scale): the file
@@ -408,7 +451,7 @@ class FakeAdvancedMode:
     """
     Advanced mode for a SoftwareCamera: the part of `rs.rs400_advanced_mode` the driver calls,
     which pyrealsense2 can't give a software device. It holds the D435 Default tuning in real
-    pyrealsense2 group structs.
+    pyrealsense2 group structs, with a D455's ranges (none for `hdad` and `ae_control`).
 
     As on a D400, the depth sensor has `visual_preset` and a writable `depth_units` only while
     advanced mode is on, and `camera_info.advanced_mode` says whether it is. Turning it on
@@ -418,10 +461,13 @@ class FakeAdvancedMode:
     def __init__(self, camera: SoftwareCamera, enabled: bool):
         self._camera = camera
         self._enabled = enabled
-        self.groups = {name: struct() for name, struct in _GROUPS.items()}
+        self.groups = {name: struct() for name, struct in ADVANCED_GROUPS.items()}
         for name, fields in D435_DEFAULT_TUNING.items():
             for field_name, value in fields.items():
                 setattr(self.groups[name], field_name, value)
+        self._ranges = {
+            name: _range(ADVANCED_GROUPS[name], fields) for name, fields in D455_RANGES.items()
+        }
         depth = camera.sensor(Sensor.STEREO_MODULE)
         self._depth_units = depth.get_option_range(rs.option.depth_units)
         camera.device.register_info(rs.camera_info.advanced_mode, "YES" if enabled else "NO")
@@ -447,14 +493,45 @@ class FakeAdvancedMode:
             self._camera.device.update_info(rs.camera_info.advanced_mode, "YES")
             self._add_options()
 
+    def _sync_depth_units(self) -> None:
+        """The depth table's units, from `depth_units`: librealsense keeps them there, in µm"""
+        depth = self._camera.sensor(Sensor.STEREO_MODULE)
+        depth_units = depth.get_option(rs.option.depth_units)
+        self.groups["depth_table"].depthUnits = round(depth_units * 1e6)
+
+    def get(self, group: str, mode: int = 0) -> "rs._AdvancedModeGroup":
+        """
+        GROUP's current values (MODE 0), minimum (1) or maximum (2), as a copy, as the SDK's
+        `get_<group>(mode)` returns them. A range the firmware doesn't report raises
+        """
+        if not self._enabled:
+            raise RuntimeError("advanced mode is off")
+        if mode == 0:
+            self._sync_depth_units()
+            return _copy(self.groups[group])
+        if group not in self._ranges:
+            raise RuntimeError(f"failed to read the {group} range")
+        return _copy(self._ranges[group][mode - 1])
+
+    if hasattr(rs.rs400_advanced_mode, "get_all_controls"):
+        # only where the installed SDK has it (2.59+), so the driver's other path runs too
+
+        def get_all_controls(self) -> SimpleNamespace:
+            """
+            Each group's [current, minimum, maximum], read at once as the SDK does, which
+            stands the current values in for a range the firmware doesn't report
+            """
+            controls = SimpleNamespace()
+            for group in ADVANCED_GROUPS:
+                modes = (0, 1, 2) if group in self._ranges else (0, 0, 0)
+                setattr(controls, group, [self.get(group, mode) for mode in modes])
+            return controls
+
     def serialize_json(self) -> str:
         """The preset file, in the JSON librealsense writes"""
         if not self._enabled:
             raise RuntimeError("serialize_json() failed! Device is not in Advanced-Mode.")
-        sensors = {sensor.name: sensor for sensor in self._camera.device.sensors}
-        # librealsense keeps the depth units in the depth table, in micrometers
-        depth_units = sensors[Sensor.STEREO_MODULE].get_option(rs.option.depth_units)
-        self.groups["depth_table"].depthUnits = round(depth_units * 1e6)
+        self._sync_depth_units()
 
         parameters = {}
         for key, (group, field_name, scale) in _PRESET_KEYS.items():
@@ -566,6 +643,33 @@ class FakeAdvancedMode:
             if sensor is not None and option in sensor.get_supported_options():
                 controls[key] = (sensor, option, names)
         return controls
+
+
+# `rs400_advanced_mode`'s `get_<group>(mode)` methods, which the driver calls by name
+for _group in ADVANCED_GROUPS:
+    setattr(
+        FakeAdvancedMode,
+        f"get_{_group}",
+        lambda self, mode=0, group=_group: self.get(group, mode),
+    )
+
+
+def _copy(struct: "rs._AdvancedModeGroup") -> "rs._AdvancedModeGroup":
+    copy = type(struct)()
+    for field_name in advanced_fields(type(struct)):
+        setattr(copy, field_name, getattr(struct, field_name))
+    return copy
+
+
+def _range(
+    struct: type["rs._AdvancedModeGroup"], fields: dict[str, tuple[float, float]]
+) -> tuple["rs._AdvancedModeGroup", "rs._AdvancedModeGroup"]:
+    """A group's minimum and maximum structs, from FIELDS' (min, max)"""
+    minimum, maximum = struct(), struct()
+    for field_name, (low, high) in fields.items():
+        setattr(minimum, field_name, low)
+        setattr(maximum, field_name, high)
+    return minimum, maximum
 
 
 def _set_float_option(sensor: rs.sensor, option: rs.option, value: float) -> None:

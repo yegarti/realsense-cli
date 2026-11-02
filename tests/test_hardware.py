@@ -167,6 +167,38 @@ def test_preset_load_restores_a_saved_preset(camera_driver, tmp_path):
     assert json.loads(driver.serialize_preset())["parameters"] == saved
 
 
+def test_advanced_list_reads_real_ranges(camera_driver):
+    """
+    The real bulk read (or per-group reads before pyrealsense2 2.59), with the firmware's own
+    ranges; `hdad` has none, and asking for its minimum fails. Needs advanced mode on already:
+    turning it on resets the device, which `test_preset_save_turns_advanced_mode_on` covers
+    """
+    import pyrealsense2 as rs
+
+    serial = camera_driver.active_device
+    if not camera_driver.advanced_mode():
+        pytest.skip("the camera has no advanced mode, or it's off")
+    result = runner.invoke(app, ["--json", "-s", serial, "advanced", "list"])
+    assert result.exit_code == 0, result.output
+    controls = {c["name"]: c for c in json.loads(result.stdout)["controls"]}
+    assert len(controls) == 63
+    ranged = [c for c in controls.values() if c["min_value"] is not None]
+    assert ranged
+    assert all(c["min_value"] <= c["max_value"] for c in ranged)
+    assert any(c["min_value"] < c["max_value"] for c in ranged)
+    assert controls["hdad.lambdaAD"]["min_value"] is None
+
+    result = runner.invoke(app, ["--json", "-s", serial, "advanced", "get", "--all"])
+    assert result.exit_code == 0, result.output
+    assert len(json.loads(result.stdout)["values"]) == 63
+
+    device = next(
+        d for d in rs.context().devices if d.get_info(rs.camera_info.serial_number) == serial
+    )
+    with pytest.raises(RuntimeError):
+        rs.rs400_advanced_mode(device).get_hdad(1)
+
+
 def test_bag_record_defaults(camera_driver, tmp_path):
     """
     The recorder wraps a real device, whose UVC sensors it records through the same hooks as

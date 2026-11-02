@@ -18,6 +18,7 @@
 - **Measure** the depth at a pixel, or over a region of the depth image
 - **Record** streams to a `.db3` recording, and **inspect** recordings: camera info, streams and frame counts
 - **Save** a device's preset file, in librealsense's own JSON, and **load** one onto a device
+- **Read** advanced controls (depth tuning such as RSM and census), with their ranges
 - Multi-device support via `--serial`
 
 ---
@@ -537,6 +538,43 @@ exit code `1`.
 
 ---
 
+### `rs advanced` — advanced controls
+
+```sh
+rs advanced list                          # every advanced control, with its type and range
+rs advanced list rsm census               # only these groups
+rs advanced get rsm.diffThresh            # read advanced controls
+rs advanced get depth_control             # every field in a group
+rs advanced get --all                     # every advanced control
+rs advanced get rsm --yes                 # turn advanced mode on without asking, if it's off
+```
+```
+$ rs advanced get rsm.diffThresh census
+  Name               Value
+ ──────────────────────────
+  rsm.diffThresh     4.0
+  census.uDiameter   9
+  census.vDiameter   9
+```
+
+An **advanced control** is one depth tuning value in an advanced-mode group: 13 groups, 63
+fields. A name is `group.field` with the SDK's names (`rsm.diffThresh`,
+`depth_control.plusIncrement`), in any case; a bare group means all its fields. An unknown name
+fails with exit code `5`, listing the valid groups or that group's fields, before anything
+reaches the device. Unlike a control, an advanced control has no step or default, and the
+firmware reports no range for some groups (`hdad`, and `ae_control` on some firmware): their
+`Min` and `Max` are `-` (`null` under `--json`). `list` reads every group in one bulk operation
+(per group on pyrealsense2 2.58, which has none).
+
+Advanced controls use the SDK's struct names and units, not the preset keys a preset file holds
+(some of which are scaled or inverted); `rs` doesn't translate between them.
+
+Advanced controls need **advanced mode**, which `rs advanced` turns on as `rs preset` does (see
+above): it asks first, `--yes` skips the question, and without a terminal or under `--json` it
+fails with exit code `8`. A device that is always in advanced mode (D500) is never asked about.
+
+---
+
 ### `rs reset` — hardware reset
 
 ```sh
@@ -588,6 +626,8 @@ parsers.
 | `rs bag info --calibration` / `--controls` | also `"intrinsics"` and `"extrinsics"` as in `rs info PROFILES...`, for the recorded profiles; and `"controls": [{"sensor", "values": {"<control>": <value>}}]`, as in `rs config get`, with the values at the recording start |
 | `rs preset save [FILE]` | `{"saved", "keys", "advanced_mode_enabled"}`: `saved` the file's absolute path, `keys` the number of preset keys written, `advanced_mode_enabled` `true` when this run turned advanced mode on |
 | `rs preset load FILE` | `{"loaded", "advanced_mode_enabled"}`: `loaded` the file's absolute path, `advanced_mode_enabled` `true` when this run turned advanced mode on |
+| `rs advanced list [GROUP]...` | `{"controls": [{"name", "group", "vtype": "int" \| "float", "min_value", "max_value"}], "advanced_mode_enabled"}`: `name` is `group.field`; `min_value` and `max_value` are `null` for a group the firmware reports no range for. `advanced_mode_enabled` as in `rs preset save` |
+| `rs advanced get` | `{"values": {"<group.field>": <value>}, "advanced_mode_enabled"}` |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
 `rs stream play` and `rs bag record` need `--frames` or `--duration` under `--json`; without them
@@ -615,7 +655,7 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `2` | Invalid command-line usage |
 | `3` | No device connected, none matches `--serial`, or a device didn't reconnect after a reset or after turning on advanced mode |
 | `4` | Unknown sensor |
-| `5` | Unknown control |
+| `5` | Unknown control, or unknown advanced-control group or field |
 | `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile; for `rs capture`, a stream or stream format it can't save in a file format asked for; for `rs depth`, a device without a depth sensor) |
 | `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, an existing `rs preset save` file, an `rs preset load` file that isn't a preset, has an invalid value or that the device refuses, an `rs bag record` output that exists or doesn't end in `.db3`, or an `rs depth` pixel or region outside the depth image |
 | `8` | Confirmation needed: several devices connected (add `--serial` or `--yes`), or advanced mode is off (add `--yes`) |
