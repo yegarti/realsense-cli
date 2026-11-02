@@ -170,15 +170,15 @@ def test_preset_load_restores_a_saved_preset(camera_driver, tmp_path):
 def test_advanced_list_reads_real_ranges(camera_driver):
     """
     The real bulk read (or per-group reads before pyrealsense2 2.59), with the firmware's own
-    ranges; `hdad` has none, and asking for its minimum fails. Turns advanced mode on if it's
-    off
+    ranges; `hdad` has none, and asking for its minimum fails. Needs advanced mode on already:
+    turning it on resets the device, which `test_preset_save_turns_advanced_mode_on` covers
     """
     import pyrealsense2 as rs
 
     serial = camera_driver.active_device
-    if camera_driver.advanced_mode() is None:
-        pytest.skip("the camera has no advanced mode")
-    result = runner.invoke(app, ["--json", "-s", serial, "advanced", "list", "--yes"])
+    if not camera_driver.advanced_mode():
+        pytest.skip("the camera has no advanced mode, or it's off")
+    result = runner.invoke(app, ["--json", "-s", serial, "advanced", "list"])
     assert result.exit_code == 0, result.output
     controls = {c["name"]: c for c in json.loads(result.stdout)["controls"]}
     assert len(controls) == 63
