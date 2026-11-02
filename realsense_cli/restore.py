@@ -14,14 +14,20 @@ So the preset is written first, then the plain controls, then the auto modes and
 step only writing what still differs from its default when it runs. A control the camera drives
 is left alone while its auto mode is on and stays on, and a gated control while its gate ends
 off. Session controls are never written: the SDK resets them in every new process.
+
+`visual_preset` reports `custom` as its default, and writing `custom` changes nothing, so a
+control restore never brings back the depth tuning. `restore_tuning()` writes the `default`
+preset instead, which the camera applies to every advanced-control group.
 """
 
 from typing import Any
 
 from realsense_cli.driver.base import DriverProtocol
-from realsense_cli.errors import InvalidValue, UnknownControl
+from realsense_cli.errors import ControlUnavailable, InvalidValue, UnknownControl
 
 PRESET = "visual_preset"
+# rs.rs400_visual_preset.default: the built-in tuning. The option's own default is custom
+DEFAULT_PRESET = 1
 
 # Auto mode -> the controls the camera drives while it's on
 AUTO_MODES: dict[str, list[str]] = {
@@ -88,6 +94,56 @@ def restore_controls(
         if old[name] != new[name]
     ]
     return restored, failed
+
+
+def restore_tuning(driver: DriverProtocol, sensor: str) -> tuple[list[Row], list[Row]]:
+    """
+    Write the `default` visual preset on SENSOR, even when it already reads that: the camera
+    then reapplies its built-in tuning to every advanced-control group, and a D400 also sets
+    laser on, laser power 150 and depth auto exposure on.
+
+    Returns the `visual_preset` row, then every other writable control on SENSOR whose value
+    changed, and the write's failure
+    """
+    controls = driver.list_controls(sensor)
+    known = sorted(control.name for control in controls)
+    if PRESET not in known:
+        raise UnknownControl(PRESET, sensor, known)
+    names = [
+        c.name
+        for c in controls
+        if not c.read_only and c.name not in SESSION_CONTROLS and c.name != PRESET
+    ]
+    names.insert(0, PRESET)
+
+    old, _ = read_available(driver, sensor, names)
+    failed = []
+    try:
+        driver.set_control_values(sensor, {PRESET: DEFAULT_PRESET})
+    except InvalidValue as e:
+        failed.append({"sensor": sensor, "control": PRESET, "error": str(e)})
+    new, _ = read_available(driver, sensor, names)
+    restored = [
+        {"sensor": sensor, "control": name, "old": old[name], "new": new[name]}
+        for name in old
+        if name in new and (old[name] != new[name] or (name == PRESET and not failed))
+    ]
+    return restored, failed
+
+
+def read_available(
+    driver: DriverProtocol, sensor: str, controls: list[str]
+) -> tuple[dict[str, float], list[str]]:
+    """
+    Values of the CONTROLS the sensor can read right now, and the names of those it can't
+    """
+    values, unavailable = {}, []
+    for control in controls:
+        try:
+            values |= driver.get_control_values(sensor, [control])
+        except ControlUnavailable:
+            unavailable.append(control)
+    return values, unavailable
 
 
 def _left_alone(

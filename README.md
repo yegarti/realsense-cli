@@ -239,6 +239,9 @@ Some controls move others, so `visual_preset` is written first, and the auto mod
 - the auto exposure/gain limits and the HDR sequence while their gate ends off: they don't apply then
 - `error_polling_enabled`: the SDK turns it back on in every new process
 
+`visual_preset`'s default is `custom`, and writing `custom` changes nothing, so a control restore
+leaves the depth tuning (the advanced controls) as it is. `rs advanced restore` brings it back.
+
 A control that fails to write stops the restore with exit code `7`; controls already written stay
 restored. With `--keep-going` the other controls are still restored, the failed ones are listed,
 and the exit code is `7`.
@@ -539,9 +542,10 @@ missing file is a usage error (exit code `2`).
 value changed, as the preset file writes it. A key the file sets to its current value isn't
 listed, and a load that changes nothing prints `No preset keys changed`.
 
-A load also sets `visual_preset` to `custom`. To undo one, `rs config restore depth` writes
-`visual_preset` back to its default, which reapplies the built-in tuning; there is no
-`rs preset restore`.
+A load also sets `visual_preset` to `custom`. To undo one, `rs advanced restore` (below) writes the
+`default` visual preset, which reapplies the built-in tuning; there is no `rs preset restore`.
+`rs config restore depth` doesn't undo a load: `visual_preset`'s own default is `custom`, which
+writes nothing.
 
 Preset files need **advanced mode**. When it's off, `rs preset` asks before turning it on, since
 turning it on resets the device; `--yes` skips the question. Without a terminal to ask on, or
@@ -563,6 +567,7 @@ rs advanced get --all                     # every advanced control
 rs advanced get rsm --yes                 # turn advanced mode on without asking, if it's off
 rs advanced set rsm.diffThresh=0.5 census.uDiameter=7   # edit advanced controls
 rs advanced set rsm.removeThresh=200 --no-validate      # skip the range check
+rs advanced restore                       # put the depth tuning back
 ```
 ```
 $ rs advanced get rsm.diffThresh census
@@ -590,6 +595,13 @@ range check: a fraction for an int field, or a negative value for an unsigned on
 since the SDK can't send it. Fields with no range skip the range check. The fields of one group
 are written together, in one read-modify-write, and the device then reports its visual preset as
 `custom`.
+
+There are no per-field defaults, and `rs` keeps no previous values. `restore` writes the `default`
+visual preset (`visual_preset` `1`), even when `visual_preset` already reads it, and the camera
+reapplies its built-in tuning to every group. A D400 then also turns the laser on, at laser power
+150, and depth auto exposure on. `restore` reads the depth controls before and after, and lists
+the `visual_preset` row and every other depth control the write changed, as `rs config restore`
+does. A write the device refuses is listed as failed, with exit code `7`.
 
 Advanced controls use the SDK's struct names and units, not the preset keys a preset file holds
 (some of which are scaled or inverted); `rs` doesn't translate between them.
@@ -654,6 +666,7 @@ parsers.
 | `rs advanced list [GROUP]...` | `{"controls": [{"name", "group", "vtype": "int" \| "float", "min_value", "max_value"}], "advanced_mode_enabled"}`: `name` is `group.field`; `min_value` and `max_value` are `null` for a group the firmware reports no range for. `advanced_mode_enabled` as in `rs preset save` |
 | `rs advanced get` | `{"values": {"<group.field>": <value>}, "advanced_mode_enabled"}` |
 | `rs advanced set` | `{"values": {"<group.field>": <value>}, "advanced_mode_enabled"}`: the values read back after the write |
+| `rs advanced restore` | `{"restored": [{"sensor", "control", "old", "new"}], "failed": [{"sensor", "control", "error"}], "advanced_mode_enabled"}`: `visual_preset` first, always, then the depth controls whose value changed; a failed `visual_preset` write goes in `failed`, printed on stdout with exit code `7` |
 | `rs reset` | `{"reset": "<serial>"}`; with `--wait`, also `"reconnected": true` |
 
 `rs stream play` and `rs bag record` need `--frames` or `--duration` under `--json`; without them
@@ -683,7 +696,7 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `4` | Unknown sensor |
 | `5` | Unknown control, or unknown advanced-control group or field |
 | `6` | Invalid or unsupported stream profile (for `rs info`, one that matches no video profile; for `rs capture`, a stream or stream format it can't save in a file format asked for; for `rs depth`, a device without a depth sensor) |
-| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, an existing `rs preset save` file, an `rs preset load` file that isn't a preset, has an invalid value or that the device refuses, an `rs bag record` output that exists or doesn't end in `.db3`, an `rs depth` pixel or region outside the depth image, or an `rs advanced set` value outside its field's type or range |
+| `7` | Invalid control value, a control that failed to write during `rs config restore`, an `rs capture` output directory that isn't empty, an existing `rs preset save` file, an `rs preset load` file that isn't a preset, has an invalid value or that the device refuses, an `rs bag record` output that exists or doesn't end in `.db3`, an `rs depth` pixel or region outside the depth image, an `rs advanced set` value outside its field's type or range, or an `rs advanced restore` visual-preset write the device refuses |
 | `8` | Confirmation needed: several devices connected (add `--serial` or `--yes`), or advanced mode is off (add `--yes`) |
 | `9` | A stream in a bounded `rs stream play`, `rs capture`, `rs depth` or any `rs bag record` received no frames, or stopped sending them for 3 seconds; an `rs bag record` stopped before the first frame; a recording with no frames |
 | `10` | A control the sensor lists but can't read right now (e.g. a temperature while not streaming) |

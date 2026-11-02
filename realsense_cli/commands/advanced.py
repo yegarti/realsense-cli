@@ -4,9 +4,16 @@ import typer
 
 from realsense_cli.advanced import check_values, parse_assignments, resolve_names
 from realsense_cli.advanced_mode import YesOption, require_advanced_mode
-from realsense_cli.printer import emit, list_advanced_controls, list_options_values
+from realsense_cli.errors import InvalidValue
+from realsense_cli.printer import (
+    emit,
+    list_advanced_controls,
+    list_options_values,
+    list_restored,
+)
+from realsense_cli.restore import restore_tuning
 from realsense_cli.session import get_driver
-from realsense_cli.types import AdvancedControl
+from realsense_cli.types import AdvancedControl, Sensor
 
 advanced_app = typer.Typer(
     help="Read and edit advanced controls: the depth tuning advanced mode unlocks",
@@ -134,3 +141,25 @@ def advanced_set(
         {"values": read_back, "advanced_mode_enabled": enabled},
         lambda: list_options_values(read_back),
     )
+
+
+@advanced_app.command(
+    name="restore",
+    help=(
+        "Put the depth tuning back: write the default visual preset, even when visual_preset "
+        "already reads it, and the camera reapplies its built-in tuning to every advanced "
+        "control. Lists visual_preset and every depth control the write changed: a D400 also "
+        "turns the laser on, at laser power 150, and depth auto exposure on. "
+        f"{_ADVANCED_MODE_HELP}"
+    ),
+)
+def advanced_restore(ctx: typer.Context, yes: YesOption = False):
+    driver, enabled = require_advanced_mode(ctx, yes)
+    restored, failed = restore_tuning(driver, Sensor.STEREO_MODULE)
+    emit(
+        ctx,
+        {"restored": restored, "failed": failed, "advanced_mode_enabled": enabled},
+        lambda: list_restored(restored, failed),
+    )
+    if failed:
+        raise typer.Exit(InvalidValue.exit_code)

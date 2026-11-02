@@ -40,7 +40,8 @@ _Avoid_: Option (the SDK's word), setting, parameter
 
 **Visual preset**:
 A named built-in tuning of the depth sensor, e.g. High Accuracy, set as the `visual_preset`
-control.
+control. The control's own default is `custom`, which applies nothing; the `default` preset is the
+built-in tuning `rs advanced restore` writes.
 _Avoid_: Preset (alone)
 
 **Advanced mode**:
