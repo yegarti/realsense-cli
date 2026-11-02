@@ -2,14 +2,14 @@ from typing import Annotated
 
 import typer
 
-from realsense_cli.advanced import resolve_names
+from realsense_cli.advanced import check_values, parse_assignments, resolve_names
 from realsense_cli.advanced_mode import YesOption, require_advanced_mode
 from realsense_cli.printer import emit, list_advanced_controls, list_options_values
 from realsense_cli.session import get_driver
 from realsense_cli.types import AdvancedControl
 
 advanced_app = typer.Typer(
-    help="Read advanced controls: the depth tuning advanced mode unlocks",
+    help="Read and edit advanced controls: the depth tuning advanced mode unlocks",
     no_args_is_help=True,
 )
 
@@ -92,4 +92,45 @@ def advanced_get(
         ctx,
         {"values": values, "advanced_mode_enabled": enabled},
         lambda: list_options_values(values),
+    )
+
+
+@advanced_app.command(
+    name="set",
+    help=(
+        "Edit advanced controls, then print the values read back: the firmware may round "
+        "floats. Each value is checked against the field's type and range first. "
+        f"{_ADVANCED_MODE_HELP}"
+    ),
+)
+def advanced_set(
+    ctx: typer.Context,
+    assignments: Annotated[
+        list[str],
+        typer.Argument(
+            metavar="NAME=VALUE...",
+            help="group.field with the SDK's names (rsm.diffThresh=0.5); case-insensitive",
+            show_default=False,
+        ),
+    ],
+    no_validate: Annotated[
+        bool,
+        typer.Option(
+            "--no-validate/",
+            help="Skip the range check; the SDK still rejects a value its type can't hold",
+        ),
+    ] = False,
+    yes: YesOption = False,
+):
+    values = parse_assignments(get_driver(ctx).advanced_groups(), assignments)
+    driver, enabled = require_advanced_mode(ctx, yes)
+    controls = {control.name: control for control in driver.advanced_controls()}
+    check_values(controls, values, ranges=not no_validate)
+    driver.set_advanced_controls(values)
+    current = {c.name: c.value for c in driver.advanced_controls()}
+    read_back = {name: current[name] for name in values}
+    emit(
+        ctx,
+        {"values": read_back, "advanced_mode_enabled": enabled},
+        lambda: list_options_values(read_back),
     )
