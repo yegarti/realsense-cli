@@ -60,7 +60,7 @@ Commands that need advanced mode call `advanced_mode.py:require_advanced_mode(ct
 | `rs list` | `cli.py` | List connected devices |
 | `rs info` | `commands/info.py` | Device details (every camera info field); with profiles or `--all-profiles`, intrinsics and extrinsics |
 | `rs config list/get/set/restore` | `commands/config.py`, `restore.py` | Read/write sensor controls, restore defaults |
-| `rs stream list/play` | `commands/stream.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream |
+| `rs stream list/play` | `commands/stream.py`, `stream_view.py`, `preview.py` | List profiles, or stream with a live view; `--frames`/`--duration` make it a bounded run that reports frames per stream; `--preview` adds a live image of one video stream |
 | `rs capture` | `commands/capture.py`, `png.py`, `npy.py` | Bounded run that saves framesets as PNGs, `.npy` arrays and/or `.raw` bytes (`--format`) plus a `capture.json` sidecar |
 | `rs depth` | `commands/depth.py`, `depth.py` | Depth at a pixel or over a region, the median of each pixel's non-zero samples across a few frames |
 | `rs bag record` | `commands/bag.py` | Record a run to a `.db3` recording through `rs.recorder` around the live device, until `--frames`/`--duration` or Ctrl-C |
@@ -84,7 +84,7 @@ Commands that need advanced mode call `advanced_mode.py:require_advanced_mode(ct
 
 All output goes through the shared consoles in `console.py`: `console` for command output (stdout), `err_console` for diagnostics (stderr). Bare `print` is a lint error (ruff `T20`).
 
-Commands build their result as a plain dict and pass it to `printer.emit(ctx, payload, table=...)`, which prints it as JSON under the global `--json` flag (shapes documented in the README) and otherwise calls the table renderer. `printer.py` handles Rich table formatting for device/profile/control listings. `stream_view.py` renders the live stream display using Rich Live.
+Commands build their result as a plain dict and pass it to `printer.emit(ctx, payload, table=...)`, which prints it as JSON under the global `--json` flag (shapes documented in the README) and otherwise calls the table renderer. `printer.py` handles Rich table formatting for device/profile/control listings. `stream_view.py` renders the live stream display using Rich Live; under `--preview`, `PreviewLive` replaces Live: a thread redraws the panels (rendered by Rich) beside the image, which `preview.py` draws as raw escape codes (truecolor half-blocks or ASCII, standard library only, sampling only the pixels drawn) in the alternate screen. Without a terminal it prints the last view once on exit, as Live does.
 
 `rs bag record` calls the driver's `record()`: an `rs.recorder` wraps the live device and the driver streams through the sensor API, so the recorder writes the frames its sensors deliver (on the mock too); `stop()` releases it, which closes the file. The SDK only takes a lowercase `.db3`, so another case is written under a temporary name and renamed.
 

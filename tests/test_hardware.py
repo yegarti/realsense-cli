@@ -278,3 +278,16 @@ def test_bag_record_defaults(camera_driver, tmp_path):
         (s["stream"], s["index"]): s["frames"] for s in json.loads(result.stdout)["streams"]
     }
     assert frames == {(s["stream"], s["index"]): s["frames"] for s in recorded["streams"]}
+
+
+def test_stream_preview(camera_driver):
+    """
+    A real camera's colorized depth and color draw as half-blocks. One 640x480 stream at a
+    time: a link with little bandwidth, such as usbipd, may deliver nothing for larger sets
+    """
+    for profile in ("depth-640x480-30-z16", "color-640x480-30-rgb8"):
+        args = ["stream", "play", profile, "--preview-mode", "halfblock", "--frames", "10"]
+        result = runner.invoke(app, args)
+        assert result.exit_code == 0, result.output
+        assert "▀" in result.stdout
+        assert "no preview" not in result.stdout

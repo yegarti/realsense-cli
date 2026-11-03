@@ -13,7 +13,7 @@
 - **List** connected devices and their supported streaming profiles
 - **Show** a device's details and calibration (intrinsics, extrinsics)
 - **Configure** sensor controls (exposure, gain, laser power, etc.)
-- **Stream** selected profiles and monitor live FPS per stream
+- **Stream** selected profiles and monitor live FPS per stream, with an optional live image in the terminal
 - **Capture** framesets to PNG, NumPy `.npy` or raw files with a JSON sidecar, to look at or load afterwards
 - **Measure** the depth at a pixel, or over a region of the depth image
 - **Record** streams to a `.db3` recording, and **inspect** recordings: camera info, streams and frame counts
@@ -290,6 +290,26 @@ rs stream play depth-640x480-30 color-0x0-15
 ```
 
 Hide metadata with `--no-md`. Switch to the low-level sensor API with `--sensor`.
+
+**Live image preview** — `--preview` draws one video stream's image beside the panels (above
+them in a narrow terminal), scaled to fit and never past the frame's own resolution:
+```sh
+rs stream play --preview                                  # the first video stream (Depth)
+rs stream play depth color --preview-stream color         # color image, both panels
+rs stream play depth-640x480-30 --preview-mode ascii      # force ASCII
+```
+
+| Option | Default | |
+|---|---|---|
+| `--preview` | off | Show the image |
+| `--preview-mode auto\|halfblock\|ascii` | `auto` | `halfblock`: 24-bit color `▀` cells, two pixels each. `ascii`: a brightness ramp (` .:-=+*#%@`). `auto` picks `halfblock` on any color terminal, 256-color ones included (a multiplexer such as Zellij reports 256 colors while passing truecolor through), and `ascii` otherwise |
+| `--preview-stream STREAM` | first video stream | A stream name or alias, any case |
+
+Giving `--preview-mode` or `--preview-stream` implies `--preview`. Depth is drawn colorized;
+the image formats drawn are RGB8, BGR8, RGBA8, BGRA8, Y8 and YUYV, and any other shows
+`no preview for <format>` in its place. Only the newest frame is drawn, so a slow terminal drops
+frames rather than falling behind. A stream that isn't a playing video stream, or `--preview`
+with none playing, fails with exit code `7`; `--preview` with `--json` is a usage error.
 
 **Bounded run** — a smoke check that frames arrive. `--frames N` stops once every stream received
 N frames, `--duration S` after S seconds; given both, whichever comes first. The run then prints
