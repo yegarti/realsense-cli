@@ -10,11 +10,18 @@ from rich.live import Live
 from realsense_cli.commands.capture import profile_payload
 from realsense_cli.console import console, err_console
 from realsense_cli.driver.base import DriverProtocol
-from realsense_cli.errors import NoFrames
+from realsense_cli.errors import InvalidValue, NoFrames
+from realsense_cli.preview import PreviewMode, choose_mode
 from realsense_cli.printer import emit, list_frame_counts, list_profiles
 from realsense_cli.session import json_output, require_device
-from realsense_cli.stream_view import StreamView
-from realsense_cli.types import _STREAM_ALIASES, FrameSet, Profile, resolve_sensor_name
+from realsense_cli.stream_view import PreviewLive, StreamView
+from realsense_cli.types import (
+    _STREAM_ALIASES,
+    FrameSet,
+    Profile,
+    resolve_sensor_name,
+    resolve_stream_name,
+)
 
 stream_app = typer.Typer(help="Stream options", no_args_is_help=True)
 
@@ -63,6 +70,10 @@ def stream_list(
                     Runs until Ctrl-C, or with --frames/--duration stops on its own and
                     prints the frames received per stream. A stream that sends no
                     frames for 3 seconds fails the run.\n
+                    \n
+                    --preview adds a live image of one video stream (the first one, or
+                    --preview-stream): truecolor half-blocks on a color terminal, ASCII
+                    otherwise (--preview-mode), depth colorized.\n
                     """,
 )
 def stream_play(
@@ -92,6 +103,28 @@ def stream_play(
         float | None,
         typer.Option("--duration", help="Stop after S seconds", show_default=False),
     ] = None,
+    preview: Annotated[
+        bool, typer.Option("--preview", help="Show a live image of one video stream")
+    ] = False,
+    preview_mode: Annotated[
+        PreviewMode | None,
+        typer.Option(
+            "--preview-mode",
+            help="How to draw the image: auto picks halfblock on a color terminal, "
+            "ascii otherwise. Implies --preview  [default: auto]",
+            show_default=False,
+        ),
+    ] = None,
+    preview_stream: Annotated[
+        str | None,
+        typer.Option(
+            "--preview-stream",
+            metavar="STREAM",
+            help="Video stream to show, by name or alias. Implies --preview  "
+            "[default: first video stream]",
+            show_default=False,
+        ),
+    ] = None,
 ):
     if duration is not None and duration <= 0:
         raise typer.BadParameter("must be more than 0 seconds", param_hint="'--duration'")
@@ -101,32 +134,46 @@ def stream_play(
             "needs --frames or --duration: without them stream play runs until interrupted",
             param_hint="'--json'",
         )
+    preview = preview or preview_mode is not None or preview_stream is not None
+    if json_output(ctx) and preview:
+        raise typer.BadParameter(
+            "can't be used with --json: the live view would corrupt the JSON",
+            param_hint="'--preview'",
+        )
     driver = require_device(ctx)
     logger.debug(f"stream {profiles}")
     if not profiles:
         profiles = []
 
-    # the streams the device started, defaults included: frames are reported under these names
-    started = [profile.stream for profile in driver.play(profiles, pipeline=api)]
+    # the profiles the device started, defaults included: frames are reported under their names
+    started_profiles = driver.play(profiles, pipeline=api)
+    started = [profile.stream for profile in started_profiles]
     view = StreamView(started, metadata=metadata)
-
-    # the live view would corrupt the JSON on stdout
-    live = (
-        nullcontext()
-        if json_output(ctx)
-        else Live(view, console=console, refresh_per_second=30)
-    )
     try:
+        live: PreviewLive | Live | nullcontext
+        update = view.update
+        if preview:
+            stream = preview_target(started_profiles, preview_stream)
+            mode = preview_mode or PreviewMode.AUTO
+            if mode is PreviewMode.AUTO:
+                mode = choose_mode(console)
+            live = PreviewLive(view, stream, mode, console)
+            update = live.update
+        elif json_output(ctx):
+            # the live view would corrupt the JSON on stdout
+            live = nullcontext()
+        else:
+            live = Live(view, console=console, refresh_per_second=30)
         with live:
             if not bounded:
                 while True:
-                    frameset = driver.wait_for_frameset()
+                    frameset = driver.wait_for_frameset(images=preview)
                     if frameset is None:
                         logger.warning("Frames didn't arrive until timeout")
                         continue
-                    view.update(frameset)
+                    update(frameset)
             counts = dict.fromkeys(started, 0)
-            count_frames(driver, counts, frames, duration, view.update)
+            count_frames(driver, counts, frames, duration, update, images=preview)
     finally:
         err_console.print("Stopping all streams")
         driver.stop()
@@ -140,6 +187,29 @@ def stream_play(
     emit(ctx, payload, lambda: list_frame_counts(counts))
 
 
+def preview_target(started: list[Profile], name: str | None) -> str:
+    """
+    The stream a preview shows: the one NAME names (a stream name or alias, any case), or the
+    first video stream STARTED holds. InvalidValue when it isn't a started video stream
+    """
+    video = [profile.stream for profile in started if profile.resolution.width]
+    if name is None:
+        if not video:
+            raise InvalidValue(
+                "No video stream to preview: the streams playing are "
+                f"{', '.join(p.stream for p in started)}"
+            )
+        return video[0]
+    wanted = str(resolve_stream_name(name)).lower()
+    for stream in video:
+        if stream.lower() == wanted:
+            return stream
+    raise InvalidValue(
+        f"Can't preview '{name}': not a video stream that is playing. "
+        f"Video streams playing: {', '.join(video) or 'none'}"
+    )
+
+
 def received_summary(counts: dict[str, int]) -> str:
     received = ", ".join(f"{stream} {n}" for stream, n in counts.items()) or "none"
     return f"Frames received: {received}"
@@ -151,13 +221,14 @@ def count_frames(
     frames: int | None,
     duration: float | None,
     on_frameset: Callable[[FrameSet], None],
+    images: bool = False,
 ) -> None:
     """
     Add the new frames received per stream to COUNTS until each of its streams has FRAMES
     frames or DURATION seconds passed; neither means until interrupted. COUNTS is filled as
     frames arrive, so it holds what arrived even when the run is cut short. Each frameset is
     handed to ON_FRAMESET. A stream still short of FRAMES that sends nothing for FRAME_TIMEOUT
-    seconds fails the run
+    seconds fails the run. With IMAGES, frames carry their images
     """
     streams = list(counts)
     started = time.monotonic()
@@ -181,7 +252,7 @@ def count_frames(
         timeout = min(last_frame[s] for s in waiting) + FRAME_TIMEOUT - now
         if deadline is not None:
             timeout = min(timeout, deadline - now)
-        frameset = driver.wait_for_frameset(timeout)
+        frameset = driver.wait_for_frameset(timeout, images=images)
         if frameset is None:
             continue
         now = time.monotonic()

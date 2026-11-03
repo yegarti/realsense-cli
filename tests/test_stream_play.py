@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from realsense_cli.cli import app
-from realsense_cli.errors import NoFrames
+from realsense_cli.errors import InvalidValue, NoFrames
 from realsense_cli.types import Frame, Profile, Resolution
 
 runner = CliRunner()
@@ -131,3 +131,103 @@ def test_repeated_frame_counts_once(driver, monkeypatch):
     assert result.exit_code == NoFrames.exit_code, result.output
     assert "No frames arrived from Color" in result.stderr
     assert "Color 1" in result.stderr
+
+
+def test_preview_draws_colorized_depth(feed):
+    result = runner.invoke(
+        app, ["stream", "play", "depth", "--preview-mode", "halfblock", "--frames", "3"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "▀" in result.stdout
+    assert "\x1b[38;2;" in result.stdout
+    assert "Depth (0)" in result.stdout
+    summary = result.stdout[result.stdout.index("Frames received") :]
+    assert next(line for line in summary.splitlines() if "Depth" in line).split() == [
+        "Depth",
+        "3",
+    ]
+
+
+def test_preview_draws_yuyv_color(feed):
+    result = runner.invoke(
+        app,
+        [
+            "stream",
+            "play",
+            "depth",
+            "color-640x480-30-yuyv",
+            "--preview-stream",
+            "color",
+            "--preview-mode",
+            "halfblock",
+            "--frames",
+            "2",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "▀" in result.stdout
+    assert "no preview" not in result.stdout
+
+
+def test_preview_falls_back_to_ascii_without_color(feed):
+    # CliRunner's stdout is no terminal: Rich detects no color
+    result = runner.invoke(app, ["stream", "play", "depth", "--preview", "--frames", "2"])
+    assert result.exit_code == 0, result.output
+    assert "▀" not in result.stdout
+    assert "\x1b[" not in result.stdout
+    assert any(char in result.stdout for char in "@%#*")
+
+
+@pytest.mark.parametrize("option", [["--preview"], ["--preview-mode", "ascii"]])
+def test_preview_with_json_is_usage_error(driver, option):
+    result = runner.invoke(app, ["--json", "stream", "play", "--frames", "1", *option])
+    assert result.exit_code == 2, result.output
+    assert "--preview" in json.loads(result.stderr)["error"]["message"]
+
+
+def test_preview_stream_must_be_a_playing_video_stream(feed):
+    result = runner.invoke(
+        app, ["stream", "play", "depth", "gyro", "--preview-stream", "gyro", "--frames", "1"]
+    )
+    assert result.exit_code == InvalidValue.exit_code, result.output
+    assert "Can't preview 'gyro'" in result.stderr
+    assert "Video streams playing: Depth" in result.stderr
+    assert "Stopping all streams" in result.stderr
+
+
+def test_preview_needs_a_video_stream(feed):
+    result = runner.invoke(app, ["stream", "play", "gyro", "--preview", "--frames", "1"])
+    assert result.exit_code == InvalidValue.exit_code, result.output
+    assert "No video stream to preview" in result.stderr
+
+
+def test_preview_stream_takes_alias_in_any_case(feed):
+    result = runner.invoke(
+        app,
+        [
+            "stream",
+            "play",
+            "depth",
+            "infrared",
+            "--preview-stream",
+            "INFRARED",
+            "--frames",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+@pytest.mark.parametrize(("args", "images"), [([], False), (["--preview"], True)])
+def test_frames_carry_images_only_with_preview(feed, driver, monkeypatch, args, images):
+    asked = set()
+    wait = driver.wait_for_frameset
+
+    def record(*a, **kwargs):
+        asked.add(kwargs.get("images", False))
+        return wait(*a, **kwargs)
+
+    monkeypatch.setattr(driver, "wait_for_frameset", record)
+    result = runner.invoke(app, ["stream", "play", "depth", "--frames", "2", *args])
+    assert result.exit_code == 0, result.output
+    assert asked == {images}
