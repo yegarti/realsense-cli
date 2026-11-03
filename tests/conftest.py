@@ -35,8 +35,12 @@ def pytest_configure(config):
     `realsense_cli.console` creates its consoles, and Rich picks colors then. This runs before
     the test modules import the CLI; nothing conftest imports may pull in that module.
     TTY_COMPATIBLE=0 makes Rich treat every console as a non-terminal, overriding FORCE_COLOR.
+    Typer's own console, which prints usage errors, passes `force_terminal=True` when
+    GITHUB_ACTIONS, FORCE_COLOR or PY_COLORS is set, which TTY_COMPATIBLE doesn't override:
+    _TYPER_FORCE_DISABLE_TERMINAL turns that off. `typer.rich_utils` reads it on import.
     """
     os.environ["TTY_COMPATIBLE"] = "0"
+    os.environ["_TYPER_FORCE_DISABLE_TERMINAL"] = "1"
 
 
 @pytest.fixture(autouse=True)
