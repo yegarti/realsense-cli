@@ -22,3 +22,8 @@ fmt:
 
 # Run lint, typecheck and tests
 check: lint typecheck test
+
+# Run what CI runs: `check` under GitHub Actions' env, then the tests on CI's oldest pyrealsense2
+ci:
+    GITHUB_ACTIONS=true just check
+    GITHUB_ACTIONS=true UV_NO_SYNC=1 uv run --with pyrealsense2==2.58.1.10581 pytest -q

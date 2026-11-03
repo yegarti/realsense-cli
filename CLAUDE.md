@@ -11,8 +11,11 @@ uv sync
 # Run CLI
 uv run rs
 
-# Run lint, type check and tests (what CI runs)
+# Run lint, type check and tests
 just check
+
+# Run what CI runs (CI env, plus tests on pyrealsense2 2.58): before every push to main
+just ci
 
 # Run tests with coverage (extra args go to pytest)
 just test
@@ -30,7 +33,9 @@ just typecheck
 just test tests/test_cli.py::test_list
 ```
 
-CI (`.github/workflows/ci.yml`) runs `just check` on PRs and pushes to `main`. Tests marked `hardware` are excluded by default.
+CI (`.github/workflows/ci.yml`) runs `just check` on PRs and pushes to `main`, and the tests again on pyrealsense2 2.58.1. Tests marked `hardware` are excluded by default.
+
+**Merging to `main`: run `just ci` on `main` after the merge, before pushing, and don't push until it passes.** Branches merge straight to `main` with no PR, so CI only runs after the push. `just check` alone isn't enough: `just ci` also sets `GITHUB_ACTIONS=true` (typer and Rich change their output under it) and runs the tests on pyrealsense2 2.58.1, as the CI matrix does. Keep its version in step with `ci.yml`.
 
 ## Architecture
 
