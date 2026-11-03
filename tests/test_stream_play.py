@@ -91,6 +91,65 @@ def test_default_stream_without_frames_fails(feed, monkeypatch):
     result = runner.invoke(app, ["stream", "play", "--frames", "2"])
     assert result.exit_code == NoFrames.exit_code, result.output
     assert "Accel" in result.stderr
+    assert "USB link may not carry all 6 streams" in result.stderr
+
+
+# a stall within --frames; with --duration, the check after the run, before any stall
+@pytest.mark.parametrize(
+    ("bound", "timeout"), [(["--frames", "3"], 0.05), (["--duration", "0.1"], 3.0)]
+)
+def test_several_streams_without_frames_hint_at_bandwidth(driver, monkeypatch, bound, timeout):
+    monkeypatch.setattr("realsense_cli.commands.stream.FRAME_TIMEOUT", timeout)
+    result = runner.invoke(app, ["--json", "stream", "play", "depth", "color", *bound])
+    message = json.loads(result.stderr.splitlines()[-1])["error"]["message"]
+    assert result.exit_code == NoFrames.exit_code, result.output
+    assert "USB link may not carry all 2 streams" in message
+    assert "try fewer streams or lower resolutions" in message
+
+
+# a stall within --frames; with --duration, the check after the run, before any stall
+@pytest.mark.parametrize(
+    ("bound", "timeout"), [(["--frames", "3"], 0.05), (["--duration", "0.1"], 3.0)]
+)
+def test_one_stream_without_frames_has_no_bandwidth_hint(driver, monkeypatch, bound, timeout):
+    monkeypatch.setattr("realsense_cli.commands.stream.FRAME_TIMEOUT", timeout)
+    result = runner.invoke(app, ["--json", "stream", "play", "depth", *bound])
+    message = json.loads(result.stderr.splitlines()[-1])["error"]["message"]
+    assert result.exit_code == NoFrames.exit_code, result.output
+    assert "No frames arrived from Depth" in message
+    assert "USB link" not in message
+
+
+def interrupt_after_waits(driver, monkeypatch, n: int) -> None:
+    waits = 0
+    wait = driver.wait_for_frameset
+
+    def interrupt(*args, **kwargs):
+        nonlocal waits
+        waits += 1
+        if waits > n:
+            raise KeyboardInterrupt
+        return wait(*args, **kwargs)
+
+    monkeypatch.setattr(driver, "wait_for_frameset", interrupt)
+
+
+def test_live_view_without_frames_shows_bandwidth_hint_once(driver, monkeypatch):
+    monkeypatch.setattr("realsense_cli.commands.stream.FRAME_TIMEOUT", 0.02)
+    interrupt_after_waits(driver, monkeypatch, 3)
+    result = runner.invoke(app, ["stream", "play", "depth", "color"])
+    view = " ".join(result.stdout.split())
+    assert "No frames arrived within 0.02s" in view
+    assert view.count("USB link may not carry all 2 streams") == 1
+
+
+def test_live_view_of_one_stream_without_frames_has_no_hint(driver, monkeypatch):
+    monkeypatch.setattr("realsense_cli.commands.stream.FRAME_TIMEOUT", 0.02)
+    interrupt_after_waits(driver, monkeypatch, 2)
+    result = runner.invoke(app, ["stream", "play", "depth"])
+    view = " ".join(result.stdout.split())
+    assert "No frames arrived within 0.02s" in view
+    assert "USB link" not in view
 
 
 def test_frames_bound_counts_per_stream(feed):

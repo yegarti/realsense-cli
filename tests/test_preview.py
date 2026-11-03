@@ -197,3 +197,25 @@ def test_preview_on_terminal_draws_in_alternate_screen():
 def test_preview_image_too_small_for_its_area():
     lines = preview_live().lines(100, 0)
     assert lines == []
+
+
+def rendered(view: StreamView) -> str:
+    console = Console(file=io.StringIO(), width=200, force_terminal=False)
+    console.print(view)
+    return " ".join(console.file.getvalue().split())  # ty: ignore[unresolved-attribute]
+
+
+def test_waiting_view_shows_notice_until_frames_arrive():
+    view = StreamView(["Depth", "Color"])
+    view.waiting(3)
+    assert "No frames arrived within 3s" in rendered(view)
+    assert "USB link may not carry all 2 streams" in rendered(view)
+    profile = Profile("Depth", Resolution(64, 48), 30, "z16", 0)
+    view.update({"Depth": Frame(profile, timestamp=0, index=1, metadata={})})
+    assert "No frames arrived" not in rendered(view)
+
+
+def test_preview_shows_waiting_notice():
+    live = preview_live()
+    live.waiting(3)
+    assert "No frames arrived within 3s" in " ".join(" ".join(live.lines(120, 20)).split())

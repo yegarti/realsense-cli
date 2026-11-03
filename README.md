@@ -289,7 +289,10 @@ rs stream play depth-640x480-30 color-0x0-15
   ╰───────────────────────────────────────────╯
 ```
 
-Hide metadata with `--no-md`. Switch to the low-level sensor API with `--sensor`.
+Hide metadata with `--no-md`. Switch to the low-level sensor API with `--sensor`. When no
+frames arrive for 3 seconds, a line below the panels says so until they do; with several
+streams playing it adds that the USB link may not carry them all (see
+[Troubleshooting](#troubleshooting)).
 
 **Live image preview** — `--preview` draws one video stream's image beside the panels (above
 them in a narrow terminal), scaled to fit and never past the frame's own resolution:
@@ -330,7 +333,8 @@ The streams checked are the ones the device started, so without profiles every d
 counts. A stream that received no frames fails the run with exit code `9`, as does a stream that
 sends nothing for 3 seconds before it has its N frames (or, with `--duration`, before the time
 is up). Frames are counted by frame number: when the pipeline hands out a slower stream's last
-frame again in a later frameset, it counts once.
+frame again in a later frameset, it counts once. With several streams playing, the error adds
+a hint to try fewer streams or lower resolutions, as do `rs capture` and `rs bag record`.
 
 ---
 
@@ -721,3 +725,15 @@ Errors print a one-line message to stderr. Unexpected errors show a traceback on
 | `9` | A stream in a bounded `rs stream play`, `rs capture`, `rs depth` or any `rs bag record` received no frames, or stopped sending them for 3 seconds; an `rs bag record` stopped before the first frame; a recording with no frames |
 | `10` | A control the sensor lists but can't read right now (e.g. a temperature while not streaming) |
 | `130` | Interrupted (Ctrl+C) |
+
+## Troubleshooting
+
+**No frames with several streams, over usbipd (WSL).** A camera attached to WSL2 through
+usbipd carries far less than native USB 3. A bare `rs stream play` starts every default stream
+(on a D455: depth and both infrared at 848x480, color at 1280x720, all at 30 fps, about
+100 MB/s), and over usbipd no frames arrive at all; around 55 MB/s still streams, at reduced
+frame rates. A bounded run then fails with exit code `9` and the live view shows a notice; both
+say the link may not carry every stream. Pass profiles explicitly to cut the load:
+```sh
+rs stream play depth-640x480-30-z16 color-640x480-30-rgb8
+```

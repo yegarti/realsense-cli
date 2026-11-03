@@ -9,7 +9,9 @@ from rich.box import SIMPLE_HEAD
 from rich.console import Console, Group
 from rich.measure import Measurement
 from rich.panel import Panel
+from rich.text import Text
 
+from realsense_cli.errors import with_bandwidth_hint
 from realsense_cli.preview import PreviewMode, preview_image, render
 from realsense_cli.types import Frame, FrameSet, Profile
 
@@ -22,13 +24,26 @@ class StreamView(Panel):
         self._panels: dict[str, Panel] = {}
         self._title_set: dict[str, bool] = {}
         self._prev_frame: dict[str, Frame | None] = {}
+        # shown below the panels while frames don't arrive
+        self._notice: Text | None = None
         self._regroup(streams)
 
-        super().__init__(Group(*self._panels.values()), box=SIMPLE_HEAD, title_align="center")
+        super().__init__(self._group(), box=SIMPLE_HEAD, title_align="center")
+
+    def waiting(self, timeout: float) -> None:
+        """Show that no frames arrived within TIMEOUT seconds, until frames arrive again"""
+        if self._notice is not None:
+            return
+        message = with_bandwidth_hint(f"No frames arrived within {timeout:g}s", self._panels)
+        self._notice = Text(message, style="yellow")
+        self.renderable = self._group()
 
     def update(self, frames: FrameSet | None):
         if not frames:
             frames = {}
+        elif self._notice is not None:
+            self._notice = None
+            self.renderable = self._group()
         logger.debug("updating view for frameset {}", frames.keys())
         for stream, frame in frames.items():
             if stream not in self._panels:
@@ -64,7 +79,11 @@ class StreamView(Panel):
             self._title_set[stream] = False
             self._prev_frame[stream] = None
 
-        self.renderable = Group(*self._panels.values())
+        self.renderable = self._group()
+
+    def _group(self) -> Group:
+        notice = [] if self._notice is None else [self._notice]
+        return Group(*self._panels.values(), *notice)
 
     @property
     def panels(self):
@@ -146,6 +165,13 @@ class PreviewLive:
             self._view.update(frames)
             if frames and self._stream in frames:
                 self._frame = frames[self._stream]
+            self._changed = True
+        self._wake.set()
+
+    def waiting(self, timeout: float) -> None:
+        """Show that no frames arrived within TIMEOUT seconds, until frames arrive again"""
+        with self._lock:
+            self._view.waiting(timeout)
             self._changed = True
         self._wake.set()
 

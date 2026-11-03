@@ -4,7 +4,7 @@ Errors the CLI reports to the user as a one-line message instead of a traceback.
 Each error has a fixed exit code (listed in the README). 2 is left to click's usage errors.
 """
 
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from typing import ClassVar
 
 
@@ -57,6 +57,20 @@ class ConfirmationRequired(RsCliError):
 
 class NoFrames(RsCliError):
     exit_code = 9
+
+
+def with_bandwidth_hint(message: str, streams: Collection[str]) -> str:
+    """
+    MESSAGE, about frames that didn't arrive while STREAMS played, with a hint that the USB link
+    may not carry them all when there are several
+    """
+    if len(streams) < 2:
+        return message
+    return (
+        f"{message}. The USB link may not carry all {len(streams)} streams at once (over "
+        "usbipd on WSL, for example): try fewer streams or lower resolutions, such as "
+        "depth-640x480-30-z16"
+    )
 
 
 class ControlUnavailable(RsCliError):

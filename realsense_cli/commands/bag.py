@@ -12,7 +12,7 @@ from realsense_cli.commands.info import calibration_payload
 from realsense_cli.commands.stream import _STREAM_ALIASES_STR, count_frames
 from realsense_cli.console import err_console
 from realsense_cli.driver import open_recording
-from realsense_cli.errors import InvalidValue, NoFrames
+from realsense_cli.errors import InvalidValue, NoFrames, with_bandwidth_hint
 from realsense_cli.printer import emit, recording_details, recording_summary
 from realsense_cli.recording import check_recording
 from realsense_cli.restore import read_available
@@ -148,6 +148,7 @@ def bag_record(
     started = driver.record(writing, profiles or [])
     counts = dict.fromkeys((profile.stream for profile in started), 0)
     first_frame: list[float] = []
+    interrupted = False
 
     def on_frameset(_: FrameSet) -> None:
         if not first_frame:
@@ -160,12 +161,15 @@ def bag_record(
             count_frames(driver, counts, frames, duration, on_frameset)
         except KeyboardInterrupt:
             logger.info("recording interrupted")
+            interrupted = True
         finally:
             stopped = time.monotonic()
             # releases the recorder, which closes the file
             driver.stop()
         if not any(counts.values()):
-            raise NoFrames("The recording stopped before the first frame arrived")
+            message = "The recording stopped before the first frame arrived"
+            # stopped with Ctrl-C, the run may just have been short
+            raise NoFrames(message if interrupted else with_bandwidth_hint(message, counts))
         recorded = check_recording(writing)
     except BaseException:
         # a failed run leaves no file; one without frames would hang librealsense's playback

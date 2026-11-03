@@ -10,7 +10,7 @@ from rich.live import Live
 from realsense_cli.commands.capture import profile_payload
 from realsense_cli.console import console, err_console
 from realsense_cli.driver.base import DriverProtocol
-from realsense_cli.errors import InvalidValue, NoFrames
+from realsense_cli.errors import InvalidValue, NoFrames, with_bandwidth_hint
 from realsense_cli.preview import PreviewMode, choose_mode
 from realsense_cli.printer import emit, list_frame_counts, list_profiles
 from realsense_cli.session import json_output, require_device
@@ -152,6 +152,7 @@ def stream_play(
     try:
         live: PreviewLive | Live | nullcontext
         update = view.update
+        waiting = view.waiting
         if preview:
             stream = preview_target(started_profiles, preview_stream)
             mode = preview_mode or PreviewMode.AUTO
@@ -159,6 +160,7 @@ def stream_play(
                 mode = choose_mode(console)
             live = PreviewLive(view, stream, mode, console)
             update = live.update
+            waiting = live.waiting
         elif json_output(ctx):
             # the live view would corrupt the JSON on stdout
             live = nullcontext()
@@ -167,9 +169,10 @@ def stream_play(
         with live:
             if not bounded:
                 while True:
-                    frameset = driver.wait_for_frameset(images=preview)
+                    frameset = driver.wait_for_frameset(FRAME_TIMEOUT, images=preview)
                     if frameset is None:
                         logger.warning("Frames didn't arrive until timeout")
+                        waiting(FRAME_TIMEOUT)
                         continue
                     update(frameset)
             counts = dict.fromkeys(started, 0)
@@ -181,7 +184,10 @@ def stream_play(
     missing = [stream for stream, n in counts.items() if n == 0]
     if missing:
         raise NoFrames(
-            f"No frames arrived from {', '.join(missing)}. {received_summary(counts)}"
+            with_bandwidth_hint(
+                f"No frames arrived from {', '.join(missing)}. {received_summary(counts)}",
+                started,
+            )
         )
     payload = {"streams": [{"stream": s, "frames": n} for s, n in counts.items()]}
     emit(ctx, payload, lambda: list_frame_counts(counts))
@@ -245,8 +251,11 @@ def count_frames(
         stalled = [s for s in waiting if now - last_frame[s] >= FRAME_TIMEOUT]
         if stalled:
             raise NoFrames(
-                f"No frames arrived from {', '.join(stalled)} within {FRAME_TIMEOUT:g}s. "
-                f"{received_summary(counts)}"
+                with_bandwidth_hint(
+                    f"No frames arrived from {', '.join(stalled)} within {FRAME_TIMEOUT:g}s. "
+                    f"{received_summary(counts)}",
+                    streams,
+                )
             )
         # wake up in time to notice the first stall, or the deadline
         timeout = min(last_frame[s] for s in waiting) + FRAME_TIMEOUT - now

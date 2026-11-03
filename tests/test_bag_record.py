@@ -114,7 +114,39 @@ def test_stalled_stream_fails_and_deletes_the_file(feed, tmp_path, monkeypatch):
     )
     error = json_error(result, NoFrames.exit_code)
     assert "Color" in error["message"]
+    assert "USB link may not carry all 2 streams" in error["message"]
     assert not path.exists()
+
+
+def test_several_streams_ending_before_the_first_frame_hint_at_bandwidth(driver, tmp_path):
+    path = tmp_path / "run.db3"
+    result = runner.invoke(
+        app, ["--json", "bag", "record", "depth", "color", "--duration", "0.1", "-o", str(path)]
+    )
+    error = json_error(result, NoFrames.exit_code)
+    assert "first frame" in error["message"]
+    assert "USB link may not carry all 2 streams" in error["message"]
+
+
+def test_ctrl_c_before_the_first_frame_has_no_bandwidth_hint(interrupt_after, tmp_path):
+    interrupt_after([])
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "bag",
+            "record",
+            "depth",
+            "color",
+            "--duration",
+            "60",
+            "-o",
+            str(tmp_path / "r.db3"),
+        ],
+    )
+    error = json_error(result, NoFrames.exit_code)
+    assert "first frame" in error["message"]
+    assert "USB link" not in error["message"]
 
 
 def test_existing_file_is_refused(driver, tmp_path):

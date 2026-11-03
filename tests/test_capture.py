@@ -158,7 +158,18 @@ def test_requested_stream_without_frames_fails_and_writes_nothing(feed, tmp_path
     assert result.stdout == ""
     error = json.loads(result.stderr.splitlines()[-1])["error"]
     assert "No frames arrived from Color within 0.1s" in error["message"]
+    assert "USB link may not carry all 2 streams" in error["message"]
     assert not out.exists()
+
+
+def test_one_stream_without_frames_has_no_bandwidth_hint(driver, tmp_path, monkeypatch):
+    monkeypatch.setattr("realsense_cli.commands.capture.FRAME_TIMEOUT", 0.05)
+    out = tmp_path / "out"
+    result = runner.invoke(app, ["--json", "capture", "depth", "--warmup", "0", "-o", str(out)])
+    assert result.exit_code == NoFrames.exit_code, result.output
+    error = json.loads(result.stderr.splitlines()[-1])["error"]
+    assert "No frames arrived from Depth" in error["message"]
+    assert "USB link" not in error["message"]
 
 
 def test_non_empty_output_directory_fails_without_force(feed, tmp_path):

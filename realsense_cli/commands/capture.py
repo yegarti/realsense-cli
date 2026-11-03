@@ -12,7 +12,7 @@ import typer
 from realsense_cli import npy, png
 from realsense_cli.console import err_console
 from realsense_cli.driver.base import DriverProtocol
-from realsense_cli.errors import InvalidProfile, InvalidValue, NoFrames
+from realsense_cli.errors import InvalidProfile, InvalidValue, NoFrames, with_bandwidth_hint
 from realsense_cli.printer import emit, list_paths
 from realsense_cli.session import require_device
 from realsense_cli.types import _STREAM_ALIASES, FrameSet, Image, Profile, Stream
@@ -217,8 +217,11 @@ def collect(
         stalled = [s for s in waiting if now - last_frame[s] >= FRAME_TIMEOUT]
         if stalled:
             raise NoFrames(
-                f"No frames arrived from {', '.join(stalled)} within {FRAME_TIMEOUT:g}s. "
-                f"Framesets captured: {len(framesets)} of {frames}"
+                with_bandwidth_hint(
+                    f"No frames arrived from {', '.join(stalled)} within {FRAME_TIMEOUT:g}s. "
+                    f"Framesets captured: {len(framesets)} of {frames}",
+                    streams,
+                )
             )
         # wake up in time to notice the first stall
         timeout = min(last_frame[s] for s in waiting) + FRAME_TIMEOUT - now
