@@ -19,7 +19,6 @@ def test_info_lists_camera_info_and_sensors_without_calibration(driver):
             "name": "Intel RealSense D435",
             "serial_number": "012345678",
             "firmware_version": "5.15.0.0",
-            "recommended_firmware_version": "5.16.0.1",
             "physical_port": "/sys/devices/pci0000:00/usb2/2-1",
             "advanced_mode": "YES",
             "product_id": "0B07",
@@ -140,8 +139,8 @@ def test_profiles_and_all_profiles_together_is_a_usage_error(driver):
 def test_table_shows_device_details_without_calibration(driver):
     result = runner.invoke(app, ["info"])
     assert result.exit_code == 0, result.output
-    assert "Recommended Firmware Version" in result.stdout
-    assert "5.16.0.1" in result.stdout
+    assert "Asic Serial Number" in result.stdout
+    assert "123456789012" in result.stdout
     assert "Stereo Module (depth)" in result.stdout
     assert "Intrinsics" not in result.stdout
 

@@ -895,7 +895,6 @@ D435 = DeviceInfo(
 )
 
 D435_CAMERA_INFO: dict[str, str] = {
-    "recommended_firmware_version": "5.16.0.1",
     "physical_port": "/sys/devices/pci0000:00/usb2/2-1",
     "product_id": "0B07",
     "camera_locked": "YES",
